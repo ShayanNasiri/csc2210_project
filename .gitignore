@@ -1,0 +1,27 @@
+# Environment
+.venv/
+__pycache__/
+*.pyc
+
+# Data (too large for git — regenerated via download_data.py)
+data/*.parquet
+data/*.pt
+
+# Results (generated at runtime)
+results/
+
+# Nsight reports
+*.ncu-rep
+
+# Build artifacts
+*.egg-info/
+
+# Testing
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
