@@ -102,10 +102,12 @@ if __name__ == "__main__":
     parser.add_argument("--system", type=str, default="baseline_a")
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--data_path", type=str, default="data/dev_tokenized.pt")
+    parser.add_argument("--output_dir", type=str, default="results")
     args = parser.parse_args()
 
     if args.system == "baseline_a":
         run_baseline_a(
             tokenized_path=args.data_path,
             batch_size=args.batch_size,
+            output_dir=args.output_dir,
         )

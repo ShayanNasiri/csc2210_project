@@ -6,5 +6,6 @@
 #SBATCH -t 1:00:00
 #SBATCH --output=results/baseline_a_%j.log
 
+export HF_HOME=/tmp/hf_cache_$USER
 source .venv/bin/activate
 python -m src.inference --system baseline_a --batch_size 64 --data_path data/dev_tokenized.pt
