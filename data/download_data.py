@@ -128,6 +128,7 @@ def pre_tokenize_dev(dev_df: pd.DataFrame, output_path: Path):
 
     all_input_ids = []
     all_attention_mask = []
+    all_token_type_ids = []
 
     for start in tqdm(range(0, len(queries), TOKENIZE_BATCH_SIZE), desc="Tokenizing"):
         end = min(start + TOKENIZE_BATCH_SIZE, len(queries))
@@ -141,13 +142,16 @@ def pre_tokenize_dev(dev_df: pd.DataFrame, output_path: Path):
         )
         all_input_ids.append(encoded["input_ids"])
         all_attention_mask.append(encoded["attention_mask"])
+        all_token_type_ids.append(encoded["token_type_ids"])
 
     input_ids = torch.cat(all_input_ids, dim=0)
     attention_mask = torch.cat(all_attention_mask, dim=0)
+    token_type_ids = torch.cat(all_token_type_ids, dim=0)
 
     tokenized = {
         "input_ids": input_ids,
         "attention_mask": attention_mask,
+        "token_type_ids": token_type_ids,
         "qids": dev_df["qid"].tolist(),
         "labels": dev_df["label"].tolist(),
     }
@@ -189,4 +193,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if "--retokenize" in sys.argv:
+        # Re-tokenize dev set only (no download)
+        dev_df = pd.read_parquet(DATA_DIR / "msmarco_dev.parquet")
+        pre_tokenize_dev(dev_df, DATA_DIR / "dev_tokenized.pt")
+    else:
+        main()

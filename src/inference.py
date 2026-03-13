@@ -28,6 +28,7 @@ def run_baseline_a(
     data = torch.load(tokenized_path, weights_only=False)
     input_ids = data["input_ids"]
     attention_mask = data["attention_mask"]
+    token_type_ids = data.get("token_type_ids")
     qids = data["qids"]
     labels = data["labels"]
 
@@ -44,7 +45,8 @@ def run_baseline_a(
             end = min(start + batch_size, num_samples)
             batch_ids = input_ids[start:end].to(device)
             batch_mask = attention_mask[start:end].to(device)
-            model(input_ids=batch_ids, attention_mask=batch_mask)
+            batch_tids = token_type_ids[start:end].to(device) if token_type_ids is not None else None
+            model(input_ids=batch_ids, attention_mask=batch_mask, token_type_ids=batch_tids)
 
         # Timed inference over all batches
         timed_batches = min(100, num_batches)
@@ -55,14 +57,15 @@ def run_baseline_a(
             end_idx = min(start_idx + batch_size, num_samples)
             batch_ids = input_ids[start_idx:end_idx].to(device)
             batch_mask = attention_mask[start_idx:end_idx].to(device)
+            batch_tids = token_type_ids[start_idx:end_idx].to(device) if token_type_ids is not None else None
 
             if i < timed_batches:
                 timer = TimerContext(device)
                 with timer:
-                    outputs = model(input_ids=batch_ids, attention_mask=batch_mask)
+                    outputs = model(input_ids=batch_ids, attention_mask=batch_mask, token_type_ids=batch_tids)
                 batch_latencies.append(timer.elapsed_ms)
             else:
-                outputs = model(input_ids=batch_ids, attention_mask=batch_mask)
+                outputs = model(input_ids=batch_ids, attention_mask=batch_mask, token_type_ids=batch_tids)
 
             logits = outputs.logits.squeeze(-1).cpu()
             all_scores.extend(logits.tolist())
