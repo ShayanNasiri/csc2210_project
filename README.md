@@ -16,7 +16,7 @@ The project compares three systems:
 
 - Python 3.13+
 - NVIDIA GPU with CUDA support
-- Triton (Linux only — used on the SLURM cluster)
+- Triton >= 3.2.0 (Linux only — required for Python 3.13 compatibility)
 
 ## Setup
 
@@ -43,16 +43,28 @@ pip install --force-reinstall torch --index-url https://download.pytorch.org/whl
 
 ### SLURM Cluster (UofT CSLab)
 
+The home directory has limited disk quota. Pip cache can fill it — always use `--no-cache-dir`.
+
 ```bash
-# SSH into the cluster
+# SSH into the cluster login node
 ssh <your-username>@cs.toronto.edu
 
-# Clone and set up
+# Clone the repo
 git clone https://github.com/ShayanNasiri/csc2210_project.git
 cd csc2210_project
-bash setup_env.sh
+
+# Create venv (clear pip cache first if you hit quota errors)
+pip cache purge && rm -rf ~/.cache/pip
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --no-cache-dir --upgrade pip
+pip install --no-cache-dir -r requirements.txt
+
+# Create results directory (needed for SLURM log output)
 mkdir -p results
 ```
+
+> **Note:** SLURM commands (`sbatch`, `srun`, `squeue`) must be run from `comps0-3.cs`, not `apps0`. SSH to a compute server first: `ssh comps0.cs`
 
 ## Running
 
@@ -64,10 +76,14 @@ Validates CUDA, Triton, model loading, and utility functions.
 # Local
 python scripts/smoke_test.py
 
-# SLURM cluster
+# SLURM cluster (run from comps0.cs, not apps0)
+# Batch (output to log file):
 sbatch scripts/run_smoke_test.sh
 # Monitor: squeue -u $USER
 # Check output: cat results/smoke_test_*.log
+
+# Interactive (output streams to terminal):
+srun --partition=gpunodes --gres=gpu:rtx_4090:1 -c 2 --mem=8G -t 0:15:00 --pty bash scripts/run_smoke_test.sh
 ```
 
 ### Data Preparation (Phase 1)
@@ -132,10 +148,6 @@ python -m pytest tests/ -v
 
 ```
 csc2210_project/
-├── IDEA.md                 # Project proposal
-├── EXECUTIONPLAN.md         # 8-phase implementation plan
-├── TODO.md                  # Development checklists
-├── SLURM.md                 # Cluster usage guide
 ├── requirements.txt         # Python dependencies
 ├── setup_env.sh             # Environment setup script
 ├── src/
