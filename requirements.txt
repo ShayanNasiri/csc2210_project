@@ -2,7 +2,7 @@ torch>=2.1.0
 transformers>=4.36.0
 datasets>=2.16.0
 ir_datasets>=0.5.5
-triton>=2.1.0; sys_platform == "linux"
+triton>=3.2.0; sys_platform == "linux"
 pandas>=2.0.0
 pyarrow>=14.0.0
 numpy>=1.24.0
