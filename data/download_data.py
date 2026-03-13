@@ -45,19 +45,20 @@ def load_via_ir_datasets():
     for qrel in train_ds.qrels_iter():
         qrels.setdefault(qrel.query_id, {})[qrel.doc_id] = qrel.relevance
 
-    # Group scored docs by query
+    # Sample TRAIN_QUERIES queries deterministically from queries that have qrels
+    all_train_qids = sorted(qrels.keys())
+    random.seed(SEED)
+    sampled_train_qids = set(random.sample(all_train_qids, min(TRAIN_QUERIES, len(all_train_qids))))
+
+    # Stream scored docs but only keep entries for sampled queries
     query_docs = {}
     for sd in tqdm(train_ds.scoreddocs_iter(), desc="Reading train scored docs"):
-        query_docs.setdefault(sd.query_id, []).append(sd.doc_id)
-
-    # Sample TRAIN_QUERIES queries deterministically
-    all_train_qids = sorted(query_docs.keys())
-    random.seed(SEED)
-    sampled_train_qids = random.sample(all_train_qids, min(TRAIN_QUERIES, len(all_train_qids)))
+        if sd.query_id in sampled_train_qids:
+            query_docs.setdefault(sd.query_id, []).append(sd.doc_id)
 
     train_rows = []
-    for qid in tqdm(sampled_train_qids, desc="Building train split"):
-        doc_ids = query_docs[qid][:CANDIDATES_PER_QUERY]
+    for qid in tqdm(sorted(sampled_train_qids), desc="Building train split"):
+        doc_ids = query_docs.get(qid, [])[:CANDIDATES_PER_QUERY]
         query_text = queries[qid]
         for did in doc_ids:
             doc = docs_store.get(did)
