@@ -91,7 +91,16 @@ srun --partition=gpunodes --gres=gpu:rtx_4090:1 -c 2 --mem=8G -t 0:15:00 --pty b
 Downloads MS MARCO passage ranking data and creates train/dev splits.
 
 ```bash
+# Local (Windows needs UTF-8 mode)
+set PYTHONUTF8=1
 python data/download_data.py
+
+# SLURM cluster (run from comps0.cs)
+sbatch scripts/run_download_data.sh
+# Check output: cat results/download_data_*.log
+
+# Validate data files:
+python -m pytest tests/test_data.py -v
 ```
 
 ### Baseline A — Standard Inference (Phase 2)
