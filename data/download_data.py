@@ -101,10 +101,16 @@ def load_via_ir_datasets():
     dev_qrels = _collect_qrels(dev_ds)
 
     all_dev_docs = _collect_scored_docs(dev_ds, desc="Reading dev scored docs")
-    # First DEV_QUERIES queries in sorted qid order
+    # Select DEV_QUERIES queries that have at least one relevant candidate
+    # in their top-100 BM25 list (queries without positives can't contribute to MRR)
+    qids_with_positives = []
+    for qid in sorted(all_dev_docs.keys()):
+        candidates = all_dev_docs[qid][:CANDIDATES_PER_QUERY]
+        if any(dev_qrels.get(qid, {}).get(did, 0) > 0 for did in candidates):
+            qids_with_positives.append(qid)
     selected_dev_docs = {
         qid: all_dev_docs[qid]
-        for qid in sorted(all_dev_docs.keys())[:DEV_QUERIES]
+        for qid in qids_with_positives[:DEV_QUERIES]
     }
     dev_rows = _load_split(
         dev_ds, selected_dev_docs, dev_docs_store, dev_queries, dev_qrels,

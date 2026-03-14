@@ -18,6 +18,9 @@ def compute_mrr_at_k(
 
     reciprocal_ranks = []
     for qid, docs in query_docs.items():
+        # Skip queries with no relevant documents (MS MARCO standard)
+        if not any(label == 1 for _, label in docs):
+            continue
         # Sort by descending score
         docs_sorted = sorted(docs, key=lambda x: x[0], reverse=True)
         rr = 0.0
