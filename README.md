@@ -126,8 +126,14 @@ sbatch scripts/run_train_offramps.sh
 ### Baseline B — Naive Early Exit (Phase 4)
 
 ```bash
-# SLURM
+# Local (single threshold, no GPU timing)
+python -m src.inference --system baseline_b --batch_size 32
+
+# SLURM (full threshold sweep)
 sbatch scripts/run_baseline_b.sh
+
+# SLURM (sanity check: threshold=0.0 should match Baseline A MRR)
+sbatch scripts/run_baseline_b_sanity.sh
 ```
 
 ### System C — Triton-Compacted Early Exit (Phase 6)
@@ -161,7 +167,9 @@ csc2210_project/
 ├── setup_env.sh             # Environment setup script
 ├── src/
 │   ├── __init__.py
+│   ├── constants.py         # Project-wide constants and defaults
 │   ├── utils.py             # Seeds, timing, device helpers
+│   ├── inference_utils.py   # Shared data loading and BatchRunner
 │   ├── model.py             # EarlyExitCrossEncoder wrapper
 │   ├── offramps.py          # Off-ramp classifier heads
 │   ├── triton_compact.py    # Triton batch-compaction kernel
@@ -173,6 +181,7 @@ csc2210_project/
 │   ├── run_smoke_test.sh    # SLURM job for smoke test
 │   ├── run_baseline_a.sh
 │   ├── run_baseline_b.sh
+│   ├── run_baseline_b_sanity.sh  # Sanity check: threshold=0.0
 │   ├── run_system_c.sh
 │   ├── run_train_offramps.sh
 │   ├── run_profiling.sh
@@ -182,9 +191,13 @@ csc2210_project/
 │   ├── download_data.py     # Data download and preprocessing
 │   └── README.md            # Data provenance
 ├── tests/
+│   ├── test_data.py
+│   ├── test_evaluate.py
+│   ├── test_baseline_a.py
 │   ├── test_offramps.py
+│   ├── test_baseline_b.py
 │   ├── test_triton_kernel.py
-│   └── test_inference.py
+│   └── test_system_c.py
 ├── results/                  # Generated at runtime (not in git)
 └── notebooks/
     └── plot_pareto.ipynb     # Pareto trade-off plots
@@ -197,7 +210,7 @@ csc2210_project/
 | Model | `cross-encoder/ms-marco-MiniLM-L-6-v2` (6 layers, hidden=384) |
 | Off-ramps | 5 linear classifiers after layers 1-5, output shape `(batch,)` |
 | Exit criterion | Shannon entropy of sigmoid output < threshold |
-| Dataset | MS MARCO passage ranking (train: 10K queries/~1M pairs, dev: 1K queries/100K pairs) |
+| Dataset | MS MARCO passage ranking (train: ~9,971 queries/~977K pairs, dev: 744 queries/~62K pairs) |
 | Metric | MRR@10, target ≤5% relative degradation from Baseline A |
 | Target GPU | RTX 4090 (24GB VRAM) on UofT CSLab SLURM cluster |
 | Local dev GPU | RTX 2060 |
