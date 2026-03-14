@@ -17,10 +17,7 @@ class EarlyExitCrossEncoder(nn.Module):
         for p in self.backbone.parameters():
             p.requires_grad = False
 
-        # References to internal components
-        self.embeddings = self.backbone.bert.embeddings
-        self.layers = self.backbone.bert.encoder.layer
-        self.pooler = self.backbone.bert.pooler
+        # Reference to the classification head
         self.classifier = self.backbone.classifier
 
         # 5 off-ramps: after layers 0-4 (1-indexed: layers 1-5)
@@ -34,33 +31,28 @@ class EarlyExitCrossEncoder(nn.Module):
             offramp_logits: list of 5 tensors, each (batch,)
             offramp_entropies: list of 5 tensors, each (batch,)
         """
-        # Get embeddings
-        hidden_states = self.embeddings(
+        # Run full BERT forward with intermediate hidden states
+        outputs = self.backbone.bert(
             input_ids=input_ids,
+            attention_mask=attention_mask,
             token_type_ids=token_type_ids,
+            output_hidden_states=True,
         )
-
-        # Build extended attention mask (same as BERT encoder expects)
-        # Shape: (batch, 1, 1, seq_len) for broadcasting in attention layers
-        extended_mask = self.backbone.bert.get_extended_attention_mask(
-            attention_mask, input_ids.shape
-        )
+        # outputs.hidden_states: tuple of 7 tensors
+        # Index 0 = embeddings, index 1-6 = after each transformer layer
+        all_hidden = outputs.hidden_states
 
         offramp_logits = []
         offramp_entropies = []
 
-        for i, layer in enumerate(self.layers):
-            hidden_states = layer(hidden_states, attention_mask=extended_mask)[0]
+        for i in range(5):  # off-ramps after layers 0-4
+            logit = self.offramps(i, all_hidden[i + 1])
+            entropy = self.offramps.ramps[i].compute_entropy(logit)
+            offramp_logits.append(logit)
+            offramp_entropies.append(entropy)
 
-            if i < 5:  # off-ramps after layers 0-4
-                logit = self.offramps(i, hidden_states)
-                entropy = self.offramps.ramps[i].compute_entropy(logit)
-                offramp_logits.append(logit)
-                offramp_entropies.append(entropy)
-
-        # Final classifier: pooler (dense + tanh on [CLS]) → classifier
-        pooled = self.pooler(hidden_states)
-        final_logit = self.classifier(pooled).squeeze(-1)
+        # Final classifier on pooler output (after layer 5)
+        final_logit = self.classifier(outputs.pooler_output).squeeze(-1)
 
         return {
             "final_logit": final_logit,
