@@ -5,6 +5,7 @@ MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 NUM_BERT_LAYERS = 6
 NUM_OFFRAMPS = 5
 HIDDEN_SIZE = 384
+MAX_TOKEN_LENGTH = 512
 
 # Inference configuration
 WARMUP_BATCHES = 10

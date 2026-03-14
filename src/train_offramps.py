@@ -10,11 +10,9 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
+from src.constants import MODEL_NAME, MAX_TOKEN_LENGTH
 from src.model import EarlyExitCrossEncoder
 from src.utils import get_device, set_seed
-
-MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-MAX_LENGTH = 512
 
 
 def tokenize_training_data(data_path: str, batch_size: int = 10_000):
@@ -36,7 +34,7 @@ def tokenize_training_data(data_path: str, batch_size: int = 10_000):
         encoded = tokenizer(
             queries[start:end],
             passages[start:end],
-            max_length=MAX_LENGTH,
+            max_length=MAX_TOKEN_LENGTH,
             padding="max_length",
             truncation=True,
             return_tensors="pt",
