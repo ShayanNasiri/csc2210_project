@@ -2,13 +2,14 @@ import torch
 import torch.nn as nn
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+from src.constants import MODEL_NAME, NUM_OFFRAMPS, HIDDEN_SIZE, NUM_BERT_LAYERS
 from src.offramps import OffRampCollection
 
 
 class EarlyExitCrossEncoder(nn.Module):
     """Cross-encoder with off-ramp classifiers after layers 1-5."""
 
-    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
+    def __init__(self, model_name: str = MODEL_NAME):
         super().__init__()
         self.backbone = AutoModelForSequenceClassification.from_pretrained(model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -20,8 +21,48 @@ class EarlyExitCrossEncoder(nn.Module):
         # Reference to the classification head
         self.classifier = self.backbone.classifier
 
-        # 5 off-ramps: after layers 0-4 (1-indexed: layers 1-5)
-        self.offramps = OffRampCollection(num_ramps=5, hidden_size=384)
+        # Off-ramps after layers 0 through NUM_OFFRAMPS-1
+        self.offramps = OffRampCollection(num_ramps=NUM_OFFRAMPS, hidden_size=HIDDEN_SIZE)
+
+    def _get_bert_embeddings(self, input_ids, token_type_ids=None):
+        """Compute BERT embeddings for input sequence."""
+        return self.backbone.bert.embeddings(
+            input_ids=input_ids, token_type_ids=token_type_ids
+        )
+
+    def _get_extended_attention_mask(self, attention_mask, input_shape):
+        """Get extended attention mask for BERT layers."""
+        return self.backbone.bert.get_extended_attention_mask(
+            attention_mask, input_shape
+        )
+
+    def _apply_bert_layer(self, layer_idx, hidden_states, extended_mask):
+        """Apply a single BERT layer with cross-version compatibility.
+
+        Args:
+            layer_idx: Index of layer to apply (0-5)
+            hidden_states: (batch, seq_len, hidden_size)
+            extended_mask: Extended attention mask
+
+        Returns:
+            Updated hidden_states of shape (batch, seq_len, hidden_size)
+        """
+        layer = self.backbone.bert.encoder.layer[layer_idx]
+        out = layer(hidden_states, attention_mask=extended_mask)
+        # Handle both tuple (cluster transformers) and tensor (local transformers) returns
+        return out[0] if isinstance(out, tuple) else out
+
+    def _apply_pooler_and_classifier(self, hidden_states):
+        """Apply BERT pooler and final classification head.
+
+        Args:
+            hidden_states: (batch, seq_len, hidden_size)
+
+        Returns:
+            Logits of shape (batch,)
+        """
+        pooled = self.backbone.bert.pooler(hidden_states)
+        return self.classifier(pooled).squeeze(-1)
 
     def forward_naive_early_exit(
         self,
@@ -41,47 +82,63 @@ class EarlyExitCrossEncoder(nn.Module):
         batch_size = input_ids.shape[0]
         device = input_ids.device
 
-        # Embeddings
-        hidden_states = self.backbone.bert.embeddings(
-            input_ids=input_ids, token_type_ids=token_type_ids
-        )
-        extended_mask = self.backbone.bert.get_extended_attention_mask(
-            attention_mask, input_ids.shape
-        )
+        # Initialize embeddings and mask
+        hidden_states = self._get_bert_embeddings(input_ids, token_type_ids)
+        extended_mask = self._get_extended_attention_mask(attention_mask, input_ids.shape)
 
+        # Initialize tracking tensors
         active_mask = torch.ones(batch_size, dtype=torch.bool, device=device)
         scores = torch.zeros(batch_size, device=device)
         exit_layer = torch.zeros(batch_size, dtype=torch.long, device=device)
-        exit_counts = [0] * 6
+        exit_counts = [0] * (NUM_OFFRAMPS + 1)
 
-        layers = self.backbone.bert.encoder.layer
+        # Process through BERT layers with early-exit logic
+        for i in range(NUM_BERT_LAYERS):
+            hidden_states = self._apply_bert_layer(i, hidden_states, extended_mask)
 
-        for i in range(6):
-            out = layers[i](hidden_states, attention_mask=extended_mask)
-            hidden_states = out[0] if isinstance(out, tuple) else out
-
-            if i < 5:  # off-ramp after layers 0-4
-                logit = self.offramps(i, hidden_states)  # (batch,)
-                entropy = self.offramps.ramps[i].compute_entropy(logit)
-
-                newly_exited = active_mask & (entropy < entropy_threshold)
+            # Check off-ramp exit criterion after layers 0 through NUM_OFFRAMPS-1
+            if i < NUM_OFFRAMPS:
+                newly_exited = self._check_exit_criterion(
+                    i, hidden_states, active_mask, entropy_threshold
+                )
                 if newly_exited.any():
-                    scores[newly_exited] = logit[newly_exited].detach()
-                    exit_layer[newly_exited] = i
-                    exit_counts[i] += newly_exited.sum().item()
+                    self._record_exits(
+                        i, newly_exited, hidden_states, scores, exit_layer, exit_counts
+                    )
                     active_mask[newly_exited] = False
-                    hidden_states = hidden_states.clone()
-                    hidden_states[~active_mask] = 0.0
+                    hidden_states = self._zero_exited_docs(hidden_states, active_mask)
 
-        # Remaining active docs go through the pooler + classifier
+        # Process remaining active docs through final classifier
         if active_mask.any():
-            pooled = self.backbone.bert.pooler(hidden_states)
-            final_logits = self.classifier(pooled).squeeze(-1)  # (batch,)
+            final_logits = self._apply_pooler_and_classifier(hidden_states)
             scores[active_mask] = final_logits[active_mask].detach()
-            exit_layer[active_mask] = 5
-            exit_counts[5] = active_mask.sum().item()
+            exit_layer[active_mask] = NUM_OFFRAMPS
+            exit_counts[NUM_OFFRAMPS] = active_mask.sum().item()
 
         return {"scores": scores, "exit_layer": exit_layer, "exit_counts": exit_counts}
+
+    def _check_exit_criterion(
+        self, layer_idx, hidden_states, active_mask, entropy_threshold
+    ):
+        """Check which active documents should exit at this off-ramp."""
+        logit = self.offramps(layer_idx, hidden_states)
+        entropy = self.offramps.ramps[layer_idx].compute_entropy(logit)
+        return active_mask & (entropy < entropy_threshold)
+
+    def _record_exits(
+        self, layer_idx, newly_exited, hidden_states, scores, exit_layer, exit_counts
+    ):
+        """Record exit information for documents exiting at this layer."""
+        logit = self.offramps(layer_idx, hidden_states)
+        scores[newly_exited] = logit[newly_exited].detach()
+        exit_layer[newly_exited] = layer_idx
+        exit_counts[layer_idx] += newly_exited.sum().item()
+
+    def _zero_exited_docs(self, hidden_states, active_mask):
+        """Zero out hidden states for exited documents (jagged batch padding)."""
+        hidden_states = hidden_states.clone()
+        hidden_states[~active_mask] = 0.0
+        return hidden_states
 
     def forward_with_offramps(self, input_ids, attention_mask, token_type_ids=None):
         """Run all layers, collecting off-ramp logits and entropies.

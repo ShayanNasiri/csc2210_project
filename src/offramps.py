@@ -1,11 +1,13 @@
 import torch
 import torch.nn as nn
 
+from src.constants import HIDDEN_SIZE, NUM_OFFRAMPS
+
 
 class OffRampHead(nn.Module):
     """Single off-ramp classifier: Linear(hidden_size, 1) on the [CLS] token."""
 
-    def __init__(self, hidden_size: int = 384):
+    def __init__(self, hidden_size: int = HIDDEN_SIZE):
         super().__init__()
         self.linear = nn.Linear(hidden_size, 1)
 
@@ -22,9 +24,9 @@ class OffRampHead(nn.Module):
 
 
 class OffRampCollection(nn.Module):
-    """Collection of 5 off-ramp heads (one after each of layers 1-5)."""
+    """Collection of off-ramp heads (one after each early BERT layer)."""
 
-    def __init__(self, num_ramps: int = 5, hidden_size: int = 384):
+    def __init__(self, num_ramps: int = NUM_OFFRAMPS, hidden_size: int = HIDDEN_SIZE):
         super().__init__()
         self.ramps = nn.ModuleList(
             [OffRampHead(hidden_size) for _ in range(num_ramps)]
