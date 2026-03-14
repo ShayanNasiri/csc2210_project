@@ -20,6 +20,7 @@ class EarlyExitCrossEncoder(nn.Module):
         # References to internal components
         self.embeddings = self.backbone.bert.embeddings
         self.layers = self.backbone.bert.encoder.layer
+        self.pooler = self.backbone.bert.pooler
         self.classifier = self.backbone.classifier
 
         # 5 off-ramps: after layers 0-4 (1-indexed: layers 1-5)
@@ -57,8 +58,9 @@ class EarlyExitCrossEncoder(nn.Module):
                 offramp_logits.append(logit)
                 offramp_entropies.append(entropy)
 
-        # Final classifier on [CLS] token after layer 5
-        final_logit = self.classifier(hidden_states[:, 0, :]).squeeze(-1)
+        # Final classifier: pooler (dense + tanh on [CLS]) → classifier
+        pooled = self.pooler(hidden_states)
+        final_logit = self.classifier(pooled).squeeze(-1)
 
         return {
             "final_logit": final_logit,
