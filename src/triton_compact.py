@@ -132,22 +132,15 @@ def compact_batch(
     # Build src_indices: shape (new_batch_size,), maps dst_row -> src_row
     src_indices = torch.where(active_mask)[0].to(dtype=torch.int64)
 
-    use_triton = HAS_TRITON and hidden_states.is_cuda
+    if HAS_TRITON and hidden_states.is_cuda:
+        # On CUDA with Triton available: use the kernel — no silent fallback.
+        # If the kernel fails here, let it raise so the experiment is not silently broken.
+        compacted_h = _triton_compact_tensor(hidden_states, src_indices, new_batch_size)
+        compacted_a = _triton_compact_tensor(attention_mask, src_indices, new_batch_size)
+        return compacted_h, compacted_a, scatter_indices
 
-    if use_triton:
-        try:
-            compacted_h = _triton_compact_tensor(
-                hidden_states, src_indices, new_batch_size
-            )
-            compacted_a = _triton_compact_tensor(
-                attention_mask, src_indices, new_batch_size
-            )
-            return compacted_h, compacted_a, scatter_indices
-        except Exception:
-            # Fall through to PyTorch fallback
-            pass
-
-    # PyTorch fallback
+    # PyTorch fallback — only reached on CPU (e.g. local Windows dev/testing).
+    # This path must NOT run during System C inference on the cluster.
     compacted_h = hidden_states[src_indices].contiguous()
     compacted_a = attention_mask[src_indices].contiguous()
     return compacted_h, compacted_a, scatter_indices
