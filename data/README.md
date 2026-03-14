@@ -12,20 +12,20 @@
 - **Queries**: ~9,971 (randomly sampled from training set, `seed=42`; some sampled queries have no scored docs)
 - **Candidates per query**: up to 100 (top BM25 candidates; not all queries have 100)
 - **Total pairs**: ~976,698
-- **Positive labels**: ~10,000
+- **Positive labels**: ~1,119
 
 ### Dev (`msmarco_dev.parquet`)
 
-- **Queries**: 1,000 (first 1K in sorted qid order from official dev/small set)
+- **Queries**: 744 (from official dev/small set, filtered to only queries with at least one relevant candidate in top-100 BM25 list)
 - **Candidates per query**: up to 100 (not all queries have 100)
-- **Total pairs**: ~96,946
-- **Positive labels**: ~1,000
+- **Total pairs**: ~62,357
+- **Positive labels**: ~748
 
 ## Pre-tokenized Dev Set (`dev_tokenized.pt`)
 
 - **Tokenizer**: `cross-encoder/ms-marco-MiniLM-L-6-v2`
 - **Max length**: 512 (padding="max_length", truncation=True)
-- **Contents**: `{"input_ids": Tensor(96946, 512), "attention_mask": Tensor(96946, 512), "qids": List[str], "labels": List[int]}`
+- **Contents**: `{"input_ids": Tensor(62357, 512), "attention_mask": Tensor(62357, 512), "token_type_ids": Tensor(62357, 512), "qids": List[str], "labels": List[int]}`
 - **Purpose**: Eliminates CPU tokenization overhead during inference latency measurement
 
 ## Schema
