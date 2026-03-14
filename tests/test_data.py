@@ -60,11 +60,18 @@ def test_dev_columns(dev_df):
 
 
 def test_dev_query_count(dev_df):
-    assert dev_df["qid"].nunique() == 1000
+    n = dev_df["qid"].nunique()
+    assert n >= 700, f"Expected ~744 queries (with positives), got {n}"
 
 
 def test_dev_row_count(dev_df):
-    assert len(dev_df) > 90000, f"Expected ~97K rows, got {len(dev_df)}"
+    assert len(dev_df) > 50000, f"Expected ~62K rows, got {len(dev_df)}"
+
+
+def test_dev_all_queries_have_positives(dev_df):
+    """Every query in dev should have at least one relevant document."""
+    pos_per_query = dev_df.groupby("qid")["label"].sum()
+    assert (pos_per_query > 0).all(), "Some dev queries have no positive labels"
 
 
 def test_dev_labels(dev_df):
@@ -78,7 +85,8 @@ def test_dev_no_nulls(dev_df):
 # --- Pre-tokenized dev ---
 
 def test_tokenized_keys(dev_tokenized):
-    assert set(dev_tokenized.keys()) == {"input_ids", "attention_mask", "qids", "labels"}
+    expected = {"input_ids", "attention_mask", "token_type_ids", "qids", "labels"}
+    assert set(dev_tokenized.keys()) == expected
 
 
 def test_tokenized_shape(dev_tokenized):
