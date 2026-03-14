@@ -2,7 +2,7 @@
 #SBATCH --partition=gpunodes
 #SBATCH --gres=gpu:rtx_4090:1
 #SBATCH -c 4
-#SBATCH --mem=16G
+#SBATCH --mem=32G
 #SBATCH -t 3:00:00
 #SBATCH --output=results/train_offramps_%j.log
 
