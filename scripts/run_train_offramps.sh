@@ -3,7 +3,7 @@
 #SBATCH --gres=gpu:rtx_4090:1
 #SBATCH -c 4
 #SBATCH --mem=32G
-#SBATCH -t 3:00:00
+#SBATCH -t 6:00:00
 #SBATCH --output=results/train_offramps_%j.log
 
 export HF_HOME=/tmp/hf_cache_$USER
