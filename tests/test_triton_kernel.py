@@ -322,7 +322,7 @@ class TestBertLayerIntegration:
         from src.model import EarlyExitCrossEncoder
 
         device = _device()
-        model = EarlyExitCrossEncoder().eval()
+        model = EarlyExitCrossEncoder().eval().to(device)
 
         B, S = 8, 32
         mask = CANONICAL_MASK.to(device)  # 4 of 8 active
@@ -369,7 +369,7 @@ class TestBertLayerIntegration:
         from src.model import EarlyExitCrossEncoder
 
         device = _device()
-        model = EarlyExitCrossEncoder().eval()
+        model = EarlyExitCrossEncoder().eval().to(device)
 
         B, S = 8, 32
         mask = CANONICAL_MASK.to(device)
