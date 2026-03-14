@@ -50,7 +50,11 @@ class EarlyExitCrossEncoder(nn.Module):
         offramp_entropies = []
 
         for i, layer in enumerate(self.layers):
-            hidden_states = layer(hidden_states, extended_mask)[0]
+            layer_out = layer(hidden_states, extended_mask)
+            hidden_states = layer_out[0]
+            # Ensure 3D: (batch, seq_len, hidden)
+            if hidden_states.dim() == 2:
+                hidden_states = hidden_states.unsqueeze(0)
 
             if i < 5:  # off-ramps after layers 0-4
                 logit = self.offramps(i, hidden_states)
