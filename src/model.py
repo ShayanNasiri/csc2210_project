@@ -98,13 +98,13 @@ class EarlyExitCrossEncoder(nn.Module):
 
             # Check off-ramp exit criterion after layers 0 through NUM_OFFRAMPS-1
             if i < NUM_OFFRAMPS:
-                newly_exited = self._check_exit_criterion(
-                    i, hidden_states, active_mask, entropy_threshold
-                )
+                logit = self.offramps(i, hidden_states)
+                entropy = self.offramps.ramps[i].compute_entropy(logit)
+                newly_exited = active_mask & (entropy < entropy_threshold)
                 if newly_exited.any():
-                    self._record_exits(
-                        i, newly_exited, hidden_states, scores, exit_layer, exit_counts
-                    )
+                    scores[newly_exited] = logit[newly_exited].detach()
+                    exit_layer[newly_exited] = i
+                    exit_counts[i] += newly_exited.sum().item()
                     active_mask[newly_exited] = False
                     hidden_states = self._zero_exited_docs(hidden_states, active_mask)
 
@@ -116,23 +116,6 @@ class EarlyExitCrossEncoder(nn.Module):
             exit_counts[NUM_OFFRAMPS] = active_mask.sum().item()
 
         return {"scores": scores, "exit_layer": exit_layer, "exit_counts": exit_counts}
-
-    def _check_exit_criterion(
-        self, layer_idx, hidden_states, active_mask, entropy_threshold
-    ):
-        """Check which active documents should exit at this off-ramp."""
-        logit = self.offramps(layer_idx, hidden_states)
-        entropy = self.offramps.ramps[layer_idx].compute_entropy(logit)
-        return active_mask & (entropy < entropy_threshold)
-
-    def _record_exits(
-        self, layer_idx, newly_exited, hidden_states, scores, exit_layer, exit_counts
-    ):
-        """Record exit information for documents exiting at this layer."""
-        logit = self.offramps(layer_idx, hidden_states)
-        scores[newly_exited] = logit[newly_exited].detach()
-        exit_layer[newly_exited] = layer_idx
-        exit_counts[layer_idx] += newly_exited.sum().item()
 
     def _zero_exited_docs(self, hidden_states, active_mask):
         """Zero out hidden states for exited documents (jagged batch padding)."""
@@ -162,7 +145,7 @@ class EarlyExitCrossEncoder(nn.Module):
         offramp_logits = []
         offramp_entropies = []
 
-        for i in range(5):  # off-ramps after layers 0-4
+        for i in range(NUM_OFFRAMPS):  # off-ramps after layers 0-4
             logit = self.offramps(i, all_hidden[i + 1])
             entropy = self.offramps.ramps[i].compute_entropy(logit)
             offramp_logits.append(logit)

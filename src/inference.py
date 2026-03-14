@@ -6,16 +6,17 @@ from transformers import AutoModelForSequenceClassification
 
 from src.constants import (
     MODEL_NAME,
+    NUM_OFFRAMPS,
     DEFAULT_DEV_DATA_PATH,
     DEFAULT_RESULTS_DIR,
     DEFAULT_BATCH_SIZE,
     DEFAULT_ENTROPY_THRESHOLDS,
-    DEFAULT_OFFRAMP_WEIGHTS_PATH,
     WARMUP_BATCHES,
     TIMED_BATCH_LIMIT,
 )
 from src.evaluate import compute_mrr_at_k, save_results
 from src.inference_utils import load_tokenized_data, BatchRunner
+from src.model import EarlyExitCrossEncoder
 from src.utils import get_device, set_seed
 
 
@@ -94,7 +95,7 @@ def run_baseline_a(
 def run_baseline_b(
     tokenized_path: str = DEFAULT_DEV_DATA_PATH,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    thresholds: list = None,
+    thresholds: list | None = None,
     output_dir: str = DEFAULT_RESULTS_DIR,
 ) -> list:
     """Run naive early-exit inference (Baseline B) over a list of entropy thresholds.
@@ -108,9 +109,6 @@ def run_baseline_b(
     device = get_device()
 
     # Load model + off-ramp weights
-    from src.model import EarlyExitCrossEncoder
-    from src.constants import NUM_OFFRAMPS
-
     model = EarlyExitCrossEncoder()
     weights_path = os.path.join(output_dir, "offramp_weights.pt")
     model.offramps.load_state_dict(
