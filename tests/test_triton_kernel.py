@@ -2,6 +2,10 @@
 
 All tests run on CPU (PyTorch fallback path) by default.
 Float16 precision test requires CUDA and is skipped otherwise.
+
+TestBertLayerIntegration verifies that compacted tensors fed into a real BERT
+layer produce (new_B, S, H) output — i.e. the attention matrix multiplications
+actually operate on the smaller batch, not the original full batch.
 """
 
 import pytest
@@ -299,4 +303,104 @@ class TestComputeCompactionIndices:
         expected = torch.cumsum(mask.int(), 0) - 1
         assert torch.equal(indices.cpu(), expected.cpu()), (
             f"Indices mismatch: expected {expected.tolist()}, got {indices.cpu().tolist()}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Integration test: compacted tensors through a real BERT layer
+# ---------------------------------------------------------------------------
+
+class TestBertLayerIntegration:
+    """Verify that compacted hidden states produce (new_B, S, H) output from
+    a real BERT attention layer — i.e. the matrix multiplications inside
+    attention actually operate on the smaller compacted batch, not the original.
+    """
+
+    def test_bert_layer_sees_compacted_batch(self):
+        """BERT layer output shape matches new_B, not original B."""
+        pytest.importorskip("transformers")
+        from src.model import EarlyExitCrossEncoder
+
+        device = _device()
+        model = EarlyExitCrossEncoder().eval()
+
+        B, S = 8, 32
+        mask = CANONICAL_MASK.to(device)  # 4 of 8 active
+
+        # Build a minimal tokenized batch
+        tokenizer = model.tokenizer
+        queries = ["query"] * B
+        passages = [f"passage {i}" for i in range(B)]
+        enc = tokenizer(
+            queries, passages,
+            max_length=S, padding="max_length", truncation=True,
+            return_tensors="pt",
+        )
+        input_ids = enc["input_ids"].to(device)
+        attention_mask = enc["attention_mask"].to(device)
+        token_type_ids = enc.get("token_type_ids", torch.zeros_like(input_ids)).to(device)
+
+        with torch.no_grad():
+            # Get embeddings for the full batch
+            hidden = model._get_bert_embeddings(input_ids, token_type_ids)
+            assert hidden.shape == (B, S, 384), f"Embeddings shape wrong: {hidden.shape}"
+
+            # Compact to active rows only
+            comp_h, comp_a, _ = compact_batch(hidden, attention_mask, mask)
+            assert comp_h.shape == (CANONICAL_NEW_B, S, 384), (
+                f"Compacted hidden shape wrong: {comp_h.shape}"
+            )
+
+            # Feed compacted batch through BERT layer 0
+            extended_mask = model._get_extended_attention_mask(comp_a, comp_h.shape[:2])
+            layer_out = model._apply_bert_layer(0, comp_h, extended_mask)
+
+            # The key assertion: layer output must be new_B, not B
+            assert layer_out.shape == (CANONICAL_NEW_B, S, 384), (
+                f"BERT layer output shape {layer_out.shape} — "
+                f"expected ({CANONICAL_NEW_B}, {S}, 384). "
+                f"The layer is NOT operating on the compacted batch."
+            )
+
+    def test_bert_layer_output_matches_reference(self):
+        """Compacted-then-layered output matches running the layer on just
+        the active rows directly — confirms no contamination from exited rows."""
+        pytest.importorskip("transformers")
+        from src.model import EarlyExitCrossEncoder
+
+        device = _device()
+        model = EarlyExitCrossEncoder().eval()
+
+        B, S = 8, 32
+        mask = CANONICAL_MASK.to(device)
+
+        tokenizer = model.tokenizer
+        queries = ["query"] * B
+        passages = [f"passage {i}" for i in range(B)]
+        enc = tokenizer(
+            queries, passages,
+            max_length=S, padding="max_length", truncation=True,
+            return_tensors="pt",
+        )
+        input_ids = enc["input_ids"].to(device)
+        attention_mask = enc["attention_mask"].to(device)
+        token_type_ids = enc.get("token_type_ids", torch.zeros_like(input_ids)).to(device)
+
+        with torch.no_grad():
+            hidden = model._get_bert_embeddings(input_ids, token_type_ids)
+
+            # Path A: compact then apply layer
+            comp_h, comp_a, _ = compact_batch(hidden, attention_mask, mask)
+            ext_mask_comp = model._get_extended_attention_mask(comp_a, comp_h.shape[:2])
+            out_compacted = model._apply_bert_layer(0, comp_h, ext_mask_comp)
+
+            # Path B: select active rows directly (reference), apply layer
+            ref_h = hidden[mask]
+            ref_a = attention_mask[mask]
+            ext_mask_ref = model._get_extended_attention_mask(ref_a, ref_h.shape[:2])
+            out_reference = model._apply_bert_layer(0, ref_h, ext_mask_ref)
+
+        assert torch.allclose(out_compacted, out_reference, atol=1e-5), (
+            f"BERT layer output differs between compact_batch path and reference. "
+            f"Max diff: {(out_compacted - out_reference).abs().max().item():.2e}"
         )
