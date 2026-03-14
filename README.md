@@ -182,11 +182,8 @@ csc2210_project/
 │   ├── run_baseline_a.sh
 │   ├── run_baseline_b.sh
 │   ├── run_baseline_b_sanity.sh  # Sanity check: threshold=0.0
-│   ├── run_system_c.sh
 │   ├── run_train_offramps.sh
-│   ├── run_profiling.sh
-│   ├── ncu_microbench.py    # Isolated Nsight micro-benchmark
-│   └── run_ncu.sh
+│   └── run_download_data.sh
 ├── data/
 │   ├── download_data.py     # Data download and preprocessing
 │   └── README.md            # Data provenance
@@ -197,7 +194,10 @@ csc2210_project/
 │   ├── test_offramps.py
 │   ├── test_baseline_b.py
 │   ├── test_triton_kernel.py
-│   └── test_system_c.py
+│   ├── test_constants.py
+│   ├── test_utils.py
+│   ├── test_inference_utils.py
+│   └── test_model_reliability.py
 ├── results/                  # Generated at runtime (not in git)
 └── notebooks/
     └── plot_pareto.ipynb     # Pareto trade-off plots
