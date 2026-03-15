@@ -4,6 +4,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from src.constants import MODEL_NAME, NUM_OFFRAMPS, HIDDEN_SIZE, NUM_BERT_LAYERS
 from src.offramps import OffRampCollection
+from src.triton_compact import compact_batch
 
 
 class EarlyExitCrossEncoder(nn.Module):
@@ -116,6 +117,75 @@ class EarlyExitCrossEncoder(nn.Module):
             exit_counts[NUM_OFFRAMPS] = active_mask.sum().item()
 
         return {"scores": scores, "exit_layer": exit_layer, "exit_counts": exit_counts}
+
+    def forward_compacted_early_exit(
+        self,
+        input_ids,
+        attention_mask,
+        token_type_ids=None,
+        entropy_threshold: float = 0.1,
+    ):
+        """System C early-exit inference. Exited docs are physically removed from
+        the batch via Triton compaction, eliminating wasted compute on padding.
+
+        Returns dict with:
+            scores:      (batch,) final relevance score for each doc
+            exit_layer:  (batch,) int tensor, 0-4 = off-ramp index, 5 = full forward
+            exit_counts: list of 6 ints — docs exiting at each point
+        """
+        batch_size = input_ids.shape[0]
+        device = input_ids.device
+
+        # Initialize embeddings and mask
+        hidden_states = self._get_bert_embeddings(input_ids, token_type_ids)
+        extended_mask = self._get_extended_attention_mask(attention_mask, input_ids.shape)
+
+        # Track which original batch positions are still active
+        global_indices = torch.arange(batch_size, device=device)
+
+        # Initialize output tensors (full batch size)
+        final_scores = torch.zeros(batch_size, device=device)
+        exit_layer = torch.zeros(batch_size, dtype=torch.long, device=device)
+        exit_counts = [0] * (NUM_OFFRAMPS + 1)
+
+        for i in range(NUM_BERT_LAYERS):
+            hidden_states = self._apply_bert_layer(i, hidden_states, extended_mask)
+
+            if i < NUM_OFFRAMPS:
+                logit = self.offramps(i, hidden_states)
+                entropy = self.offramps.ramps[i].compute_entropy(logit)
+                exited = entropy < entropy_threshold
+
+                if exited.any():
+                    # Record scores and exit info for exited items
+                    final_scores[global_indices[exited]] = logit[exited].detach()
+                    exit_layer[global_indices[exited]] = i
+                    exit_counts[i] = exited.sum().item()
+
+                    # Compact: physically remove exited rows
+                    active_mask = ~exited
+                    hidden_states, attention_mask, _ = compact_batch(
+                        hidden_states, attention_mask, active_mask
+                    )
+                    global_indices = global_indices[active_mask]
+
+                    # Recompute extended_mask for the new (smaller) batch
+                    extended_mask = self._get_extended_attention_mask(
+                        attention_mask, hidden_states.shape[:2]
+                    )
+
+                    # If no items remain, stop
+                    if hidden_states.shape[0] == 0:
+                        break
+
+        # Process remaining active docs through final classifier
+        if hidden_states.shape[0] > 0 and global_indices.shape[0] > 0:
+            final_logits = self._apply_pooler_and_classifier(hidden_states)
+            final_scores[global_indices] = final_logits.detach()
+            exit_layer[global_indices] = NUM_OFFRAMPS
+            exit_counts[NUM_OFFRAMPS] = global_indices.shape[0]
+
+        return {"scores": final_scores, "exit_layer": exit_layer, "exit_counts": exit_counts}
 
     def _zero_exited_docs(self, hidden_states, active_mask):
         """Zero out hidden states for exited documents (jagged batch padding)."""
