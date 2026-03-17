@@ -146,10 +146,15 @@ sbatch scripts/run_system_c.sh
 ### Full Profiling Sweep (Phase 7)
 
 ```bash
-# Latency sweep across all systems, batch sizes, and thresholds
+# Latency sweep across all systems, batch sizes, and thresholds (RTX 4090, ~5h)
 sbatch scripts/run_profiling.sh
 
-# Nsight profiling (isolated micro-benchmark)
+# After sweep completes, fetch results and generate plots locally:
+python scripts/plot_pareto.py
+# Outputs: results/pareto_frontier.png, speedup_vs_batchsize.png,
+#          exit_distribution.png, accuracy_degradation.png
+
+# Nsight profiling (isolated micro-benchmark — ncu not available on UofT CSLab)
 sbatch scripts/run_ncu.sh
 ```
 
@@ -184,7 +189,11 @@ csc2210_project/
 │   ├── run_baseline_b_sanity.sh  # Sanity check: threshold=0.0
 │   ├── run_train_offramps.sh
 │   ├── run_download_data.sh
-│   └── run_system_c.sh
+│   ├── run_system_c.sh
+│   ├── run_profiling.sh          # SLURM job: full latency sweep (all systems)
+│   ├── ncu_microbench.py         # Isolated micro-benchmark for Nsight profiling
+│   ├── run_ncu.sh                # SLURM job: Nsight Compute profiling
+│   └── plot_pareto.py            # Generate Pareto trade-off plots (run locally)
 ├── data/
 │   ├── download_data.py     # Data download and preprocessing
 │   └── README.md            # Data provenance
@@ -199,10 +208,9 @@ csc2210_project/
 │   ├── test_utils.py
 │   ├── test_inference_utils.py
 │   ├── test_model_reliability.py
-│   └── test_system_c.py
-├── results/                  # Generated at runtime (not in git)
-└── notebooks/
-    └── plot_pareto.ipynb     # Pareto trade-off plots
+│   ├── test_system_c.py
+│   └── test_profiling.py
+└── results/                  # Generated at runtime (not in git)
 ```
 
 ## Key Technical Details
