@@ -183,7 +183,8 @@ csc2210_project/
 │   ├── run_baseline_b.sh
 │   ├── run_baseline_b_sanity.sh  # Sanity check: threshold=0.0
 │   ├── run_train_offramps.sh
-│   └── run_download_data.sh
+│   ├── run_download_data.sh
+│   └── run_system_c.sh
 ├── data/
 │   ├── download_data.py     # Data download and preprocessing
 │   └── README.md            # Data provenance
@@ -197,7 +198,8 @@ csc2210_project/
 │   ├── test_constants.py
 │   ├── test_utils.py
 │   ├── test_inference_utils.py
-│   └── test_model_reliability.py
+│   ├── test_model_reliability.py
+│   └── test_system_c.py
 ├── results/                  # Generated at runtime (not in git)
 └── notebooks/
     └── plot_pareto.ipynb     # Pareto trade-off plots
