@@ -6,11 +6,12 @@ This project builds a custom Triton kernel to physically compact batches during 
 
 ## Architecture
 
-The project compares three systems:
+The project compares four systems:
 
 - **Baseline A** — Standard `cross-encoder/ms-marco-MiniLM-L-6-v2` inference (no early exit)
 - **Baseline B** — Naive early-exit with off-ramps; exited documents remain in the batch as padding
 - **System C** — Triton-compacted early-exit; a custom kernel physically removes exited documents between layers
+- **System D** — Jointly-trained backbone + off-ramps with Triton-compacted early exit
 
 ## Requirements
 
@@ -43,7 +44,7 @@ pip install --force-reinstall torch --index-url https://download.pytorch.org/whl
 
 ### SLURM Cluster (UofT CSLab)
 
-The home directory has limited disk quota. Pip cache can fill it — always use `--no-cache-dir`.
+The home directory has limited disk quota. All SLURM scripts source `scripts/setup_env.sh`, which automatically creates the venv and installs dependencies with `--no-cache-dir` on first run.
 
 ```bash
 # SSH into the cluster login node
@@ -53,15 +54,12 @@ ssh <your-username>@cs.toronto.edu
 git clone https://github.com/ShayanNasiri/csc2210_project.git
 cd csc2210_project
 
-# Create venv (clear pip cache first if you hit quota errors)
-pip cache purge && rm -rf ~/.cache/pip
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --no-cache-dir --upgrade pip
-pip install --no-cache-dir -r requirements.txt
-
 # Create results directory (needed for SLURM log output)
 mkdir -p results
+
+# Submit any job — the venv is created automatically
+ssh comps0.cs
+sbatch scripts/run_smoke_test.sh
 ```
 
 > **Note:** SLURM commands (`sbatch`, `srun`, `squeue`) must be run from `comps0-3.cs`, not `apps0`. SSH to a compute server first: `ssh comps0.cs`
@@ -143,6 +141,25 @@ sbatch scripts/run_baseline_b_sanity.sh
 sbatch scripts/run_system_c.sh
 ```
 
+### Joint Training (System D)
+
+Trains backbone and off-ramps jointly with differential learning rates and combined loss.
+
+```bash
+# Local (quick test)
+python -m src.train_joint --data_path data/msmarco_train.parquet --epochs 1 --max_steps 100
+
+# SLURM (full training)
+sbatch scripts/run_train_joint.sh
+```
+
+### System D — Joint-Trained Compacted Early Exit
+
+```bash
+# SLURM (requires joint_weights.pt from training above)
+sbatch scripts/run_system_d.sh
+```
+
 ### Full Profiling Sweep (Phase 7)
 
 ```bash
@@ -178,8 +195,9 @@ csc2210_project/
 │   ├── model.py             # EarlyExitCrossEncoder wrapper
 │   ├── offramps.py          # Off-ramp classifier heads
 │   ├── triton_compact.py    # Triton batch-compaction kernel
-│   ├── inference.py         # Inference drivers (A/B/C)
-│   ├── train_offramps.py    # Off-ramp training loop
+│   ├── inference.py         # Inference drivers (A/B/C/D)
+│   ├── train_offramps.py    # Off-ramp training loop (frozen backbone)
+│   ├── train_joint.py       # Joint backbone + off-ramp training
 │   └── evaluate.py          # MRR@10 evaluation
 ├── scripts/
 │   ├── smoke_test.py        # Cluster sanity check
@@ -190,7 +208,10 @@ csc2210_project/
 │   ├── run_train_offramps.sh
 │   ├── run_download_data.sh
 │   ├── run_system_c.sh
+│   ├── run_train_joint.sh        # SLURM job: joint backbone + off-ramp training
+│   ├── run_system_d.sh           # SLURM job: System D inference
 │   ├── run_profiling.sh          # SLURM job: full latency sweep (all systems)
+│   ├── setup_env.sh              # Shared venv setup (sourced by all SLURM scripts)
 │   ├── ncu_microbench.py         # Isolated micro-benchmark for Nsight profiling
 │   ├── run_ncu.sh                # SLURM job: Nsight Compute profiling
 │   └── plot_pareto.py            # Generate Pareto trade-off plots (run locally)
@@ -209,6 +230,7 @@ csc2210_project/
 │   ├── test_inference_utils.py
 │   ├── test_model_reliability.py
 │   ├── test_system_c.py
+│   ├── test_train_joint.py
 │   └── test_profiling.py
 └── results/                  # Generated at runtime (not in git)
 ```
