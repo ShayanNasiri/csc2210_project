@@ -6,7 +6,5 @@
 #SBATCH -t 4:00:00
 #SBATCH --output=results/download_data_%j.log
 
-export IR_DATASETS_HOME=/tmp/ir_datasets_$USER
-
-source .venv/bin/activate
+source scripts/setup_env.sh
 python data/download_data.py

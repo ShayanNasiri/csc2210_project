@@ -6,7 +6,6 @@
 #SBATCH -t 0:30:00
 #SBATCH --output=results/ncu_%j.log
 
-export HF_HOME=/tmp/hf_cache_$USER
-source .venv/bin/activate
+source scripts/setup_env.sh
 
 ncu --set full -o results/nsight_compact_kernel python scripts/ncu_microbench.py

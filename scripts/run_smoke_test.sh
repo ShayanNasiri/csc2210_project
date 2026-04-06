@@ -6,15 +6,6 @@
 #SBATCH -t 0:15:00
 #SBATCH --output=results/smoke_test_%j.log
 
-# Build venv if missing
-if [ ! -d .venv ]; then
-    echo "Creating venv..."
-    python3 -m venv .venv
-    source .venv/bin/activate
-    pip install --upgrade pip
-    pip install -r requirements.txt
-else
-    source .venv/bin/activate
-fi
+source scripts/setup_env.sh
 
 python scripts/smoke_test.py

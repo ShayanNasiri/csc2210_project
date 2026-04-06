@@ -6,6 +6,5 @@
 #SBATCH -t 6:00:00
 #SBATCH --output=results/train_offramps_%j.log
 
-export HF_HOME=/tmp/hf_cache_$USER
-source .venv/bin/activate
+source scripts/setup_env.sh
 python -m src.train_offramps --data_path data/msmarco_train.parquet --epochs 3 --batch_size 128

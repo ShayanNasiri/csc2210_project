@@ -6,8 +6,7 @@
 #SBATCH -t 0:30:00
 #SBATCH --output=results/baseline_b_sanity_%j.log
 
-export HF_HOME=/tmp/hf_cache_$USER
-source .venv/bin/activate
+source scripts/setup_env.sh
 
 python -c "
 from src.inference import run_baseline_b

@@ -6,8 +6,7 @@
 #SBATCH -t 5:00:00
 #SBATCH --output=results/profiling_%j.log
 
-export HF_HOME=/tmp/hf_cache_$USER
-source .venv/bin/activate
+source scripts/setup_env.sh
 
 echo "=== Full latency sweep ==="
 python -m src.inference --system full_sweep --data_path data/dev_tokenized.pt
