@@ -16,6 +16,7 @@ DEFAULT_BATCH_SIZE = 64
 DEFAULT_DEV_DATA_PATH = "data/dev_tokenized.pt"
 DEFAULT_RESULTS_DIR = "results"
 DEFAULT_OFFRAMP_WEIGHTS_PATH = "results/offramp_weights.pt"
+DEFAULT_JOINT_WEIGHTS_PATH = "results/joint_weights.pt"
 
 # Default thresholds for Baseline B
 DEFAULT_ENTROPY_THRESHOLDS = [0.01, 0.05, 0.1, 0.2, 0.3, 0.5]

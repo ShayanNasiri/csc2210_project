@@ -13,6 +13,7 @@ from src.constants import (
     DEFAULT_RESULTS_DIR,
     DEFAULT_BATCH_SIZE,
     DEFAULT_ENTROPY_THRESHOLDS,
+    DEFAULT_JOINT_WEIGHTS_PATH,
     WARMUP_BATCHES,
     TIMED_BATCH_LIMIT,
 )
@@ -272,6 +273,93 @@ def run_system_c(
     return all_results
 
 
+def run_system_d(
+    tokenized_path: str = DEFAULT_DEV_DATA_PATH,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    thresholds: list | None = None,
+    output_dir: str = DEFAULT_RESULTS_DIR,
+) -> list:
+    """Run System D: jointly-trained model with Triton-compacted early exit.
+
+    Uses joint_weights.pt (backbone + offramps trained together) instead of
+    the frozen-backbone offramp_weights.pt.
+
+    Returns a list of result dicts, one per threshold.
+    """
+    if thresholds is None:
+        thresholds = DEFAULT_ENTROPY_THRESHOLDS
+
+    set_seed()
+    device = get_device()
+
+    # Load model + joint weights (backbone + offramps)
+    model = EarlyExitCrossEncoder()
+    joint_weights_path = os.path.join(output_dir, "joint_weights.pt")
+    state = torch.load(joint_weights_path, map_location=device, weights_only=True)
+    model.backbone.load_state_dict(state["backbone"])
+    model.offramps.load_state_dict(state["offramps"])
+    model.to(device)
+    model.eval()
+
+    # Load data
+    data = load_tokenized_data(tokenized_path)
+    num_samples = data["input_ids"].shape[0]
+
+    # Set up batch runner
+    runner = BatchRunner(
+        num_samples=num_samples,
+        batch_size=batch_size,
+        warmup_batches=WARMUP_BATCHES,
+        timed_batch_limit=TIMED_BATCH_LIMIT,
+    )
+
+    all_results = []
+
+    for threshold in thresholds:
+        def forward_fn(input_ids, attention_mask, token_type_ids, _t=threshold):
+            return model.forward_compacted_early_exit(
+                input_ids, attention_mask, token_type_ids, entropy_threshold=_t
+            )
+
+        with torch.no_grad():
+            runner.warmup(data, device, forward_fn)
+            all_outputs, batch_latencies = runner.run_with_timing(data, device, forward_fn)
+
+        # Aggregate results
+        all_scores = []
+        global_exit_counts = [0] * (NUM_OFFRAMPS + 1)
+        for out in all_outputs:
+            all_scores.extend(out["scores"].cpu().tolist())
+            for j in range(NUM_OFFRAMPS + 1):
+                global_exit_counts[j] += out["exit_counts"][j]
+
+        total_timed_latency_ms = sum(batch_latencies)
+        mean_batch_latency_ms = total_timed_latency_ms / len(batch_latencies)
+        mrr10 = compute_mrr_at_k(data["qids"], all_scores, data["labels"], k=10)
+
+        result = {
+            "system": "system_d",
+            "threshold": threshold,
+            "mrr10": mrr10,
+            "mean_batch_latency_ms": mean_batch_latency_ms,
+            "total_latency_s": total_timed_latency_ms / 1000.0,
+            "batch_size": batch_size,
+            "exit_counts": global_exit_counts,
+        }
+        all_results.append(result)
+
+        print(
+            f"Threshold {threshold:.2f} — MRR@10: {mrr10:.4f}, "
+            f"Latency: {mean_batch_latency_ms:.2f} ms, "
+            f"Exit counts: {global_exit_counts}"
+        )
+
+    os.makedirs(output_dir, exist_ok=True)
+    save_results(all_results, os.path.join(output_dir, "system_d_results.json"))
+
+    return all_results
+
+
 DEFAULT_SWEEP_SYSTEMS = ["baseline_a", "baseline_b", "system_c"]
 DEFAULT_SWEEP_BATCH_SIZES = [32, 64, 128, 256, 512]
 
@@ -445,6 +533,12 @@ if __name__ == "__main__":
         )
     elif args.system == "system_c":
         run_system_c(
+            tokenized_path=args.data_path,
+            batch_size=args.batch_size,
+            output_dir=args.output_dir,
+        )
+    elif args.system == "system_d":
+        run_system_d(
             tokenized_path=args.data_path,
             batch_size=args.batch_size,
             output_dir=args.output_dir,
