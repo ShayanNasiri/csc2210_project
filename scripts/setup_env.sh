@@ -17,8 +17,8 @@ if [ ! -d "$VENV_DIR" ] || ! "$VENV_DIR/bin/python" -c "import torch" 2>/dev/nul
     source "$VENV_DIR/bin/activate"
     echo "Installing PyTorch with CUDA 12.4 ..."
     pip install --no-cache-dir torch==2.5.1 --index-url https://download.pytorch.org/whl/cu124
-    echo "Installing remaining dependencies ..."
-    pip install --no-cache-dir -r requirements.txt
+    echo "Installing remaining dependencies (skipping torch — already installed) ..."
+    pip install --no-cache-dir $(grep -v '^torch' requirements.txt)
 else
     source "$VENV_DIR/bin/activate"
 fi
