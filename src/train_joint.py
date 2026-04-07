@@ -53,6 +53,11 @@ def train_joint(
     """
     set_seed()
     device = get_device()
+    if device.type != "cuda":
+        raise RuntimeError(
+            "CUDA not available — joint training requires a GPU. "
+            "Check that PyTorch is installed with a CUDA version matching your driver."
+        )
 
     # Tokenize training data (reuses the same function from train_offramps)
     input_ids, attention_mask, token_type_ids, labels = tokenize_training_data(data_path)

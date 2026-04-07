@@ -20,3 +20,6 @@ if ! python -c "import torch" 2>/dev/null; then
     echo "Installing dependencies (--no-cache-dir to save disk) ..."
     pip install --no-cache-dir -r requirements.txt
 fi
+
+# Verify CUDA is accessible
+python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available — check PyTorch/driver compatibility'; print(f'GPU ready: {torch.cuda.get_device_name(0)}')"
