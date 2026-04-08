@@ -8,4 +8,4 @@
 #SBATCH --output=results/baseline_b_%j.log
 
 source scripts/setup_env.sh
-python -m src.inference --system baseline_b --batch_size 64 --data_path data/dev_tokenized.pt
+python -m src.inference --system baseline_b --batch_size 64 --data_path data/dev_tokenized.pt --results_tag test_

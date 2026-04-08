@@ -28,6 +28,7 @@ def run_baseline_a(
     tokenized_path: str = DEFAULT_DEV_DATA_PATH,
     batch_size: int = DEFAULT_BATCH_SIZE,
     output_dir: str = DEFAULT_RESULTS_DIR,
+    results_tag: str = "",
 ) -> dict:
     """Run standard cross-encoder inference (Baseline A) on pre-tokenized dev set."""
     set_seed()
@@ -86,7 +87,7 @@ def run_baseline_a(
 
     # Save results
     os.makedirs(output_dir, exist_ok=True)
-    save_results(results, os.path.join(output_dir, "baseline_a_results.json"))
+    save_results(results, os.path.join(output_dir, f"{results_tag}baseline_a_results.json"))
 
     print(f"Baseline A — MRR@10: {mrr10:.4f}")
     print(f"Mean batch latency: {mean_batch_latency_ms:.2f} ms")
@@ -101,6 +102,7 @@ def run_baseline_b(
     batch_size: int = DEFAULT_BATCH_SIZE,
     thresholds: list | None = None,
     output_dir: str = DEFAULT_RESULTS_DIR,
+    results_tag: str = "",
 ) -> list:
     """Run naive early-exit inference (Baseline B) over a list of entropy thresholds.
 
@@ -180,7 +182,7 @@ def run_baseline_b(
         )
 
     os.makedirs(output_dir, exist_ok=True)
-    save_results(all_results, os.path.join(output_dir, "baseline_b_results.json"))
+    save_results(all_results, os.path.join(output_dir, f"{results_tag}baseline_b_results.json"))
 
     return all_results
 
@@ -190,6 +192,7 @@ def run_system_c(
     batch_size: int = DEFAULT_BATCH_SIZE,
     thresholds: list | None = None,
     output_dir: str = DEFAULT_RESULTS_DIR,
+    results_tag: str = "",
 ) -> list:
     """Run Triton-compacted early-exit inference (System C) over a list of entropy thresholds.
 
@@ -269,7 +272,7 @@ def run_system_c(
         )
 
     os.makedirs(output_dir, exist_ok=True)
-    save_results(all_results, os.path.join(output_dir, "system_c_results.json"))
+    save_results(all_results, os.path.join(output_dir, f"{results_tag}system_c_results.json"))
 
     return all_results
 
@@ -279,6 +282,7 @@ def run_system_d(
     batch_size: int = DEFAULT_BATCH_SIZE,
     thresholds: list | None = None,
     output_dir: str = DEFAULT_RESULTS_DIR,
+    results_tag: str = "",
 ) -> list:
     """Run System D: jointly-trained model with Triton-compacted early exit.
 
@@ -356,7 +360,7 @@ def run_system_d(
         )
 
     os.makedirs(output_dir, exist_ok=True)
-    save_results(all_results, os.path.join(output_dir, "system_d_results.json"))
+    save_results(all_results, os.path.join(output_dir, f"{results_tag}system_d_results.json"))
 
     return all_results
 
@@ -367,6 +371,7 @@ def run_system_e(
     thresholds: list | None = None,
     output_dir: str = DEFAULT_RESULTS_DIR,
     weights_path: str | None = None,
+    results_tag: str = "",
 ) -> list:
     """Run System E: jointly-trained model with self-distillation (KL) weights.
 
@@ -449,7 +454,7 @@ def run_system_e(
         )
 
     os.makedirs(output_dir, exist_ok=True)
-    save_results(all_results, os.path.join(output_dir, "system_e_results.json"))
+    save_results(all_results, os.path.join(output_dir, f"{results_tag}system_e_results.json"))
 
     return all_results
 
@@ -612,6 +617,8 @@ if __name__ == "__main__":
     parser.add_argument("--data_path", type=str, default="data/dev_tokenized.pt")
     parser.add_argument("--output_dir", type=str, default="results")
     parser.add_argument("--weights_path", type=str, default=None)
+    parser.add_argument("--results_tag", type=str, default="",
+                        help="Prefix for result filenames, e.g. 'val_' or 'test_'")
     args = parser.parse_args()
 
     if args.system == "baseline_a":
@@ -619,24 +626,28 @@ if __name__ == "__main__":
             tokenized_path=args.data_path,
             batch_size=args.batch_size,
             output_dir=args.output_dir,
+            results_tag=args.results_tag,
         )
     elif args.system == "baseline_b":
         run_baseline_b(
             tokenized_path=args.data_path,
             batch_size=args.batch_size,
             output_dir=args.output_dir,
+            results_tag=args.results_tag,
         )
     elif args.system == "system_c":
         run_system_c(
             tokenized_path=args.data_path,
             batch_size=args.batch_size,
             output_dir=args.output_dir,
+            results_tag=args.results_tag,
         )
     elif args.system == "system_d":
         run_system_d(
             tokenized_path=args.data_path,
             batch_size=args.batch_size,
             output_dir=args.output_dir,
+            results_tag=args.results_tag,
         )
     elif args.system == "system_e":
         run_system_e(
@@ -644,6 +655,7 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             output_dir=args.output_dir,
             weights_path=args.weights_path,
+            results_tag=args.results_tag,
         )
     elif args.system == "full_sweep":
         run_full_sweep(
