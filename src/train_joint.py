@@ -21,10 +21,36 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
-from src.constants import MODEL_NAME, MAX_TOKEN_LENGTH, DEFAULT_JOINT_WEIGHTS_PATH
+from src.constants import MODEL_NAME, MAX_TOKEN_LENGTH, DEFAULT_JOINT_WEIGHTS_PATH, DEFAULT_SYSTEM_E_WEIGHTS_PATH
 from src.model import EarlyExitCrossEncoder
 from src.train_offramps import tokenize_training_data
 from src.utils import get_device, set_seed
+
+
+def compute_distill_loss(ramp_logit: torch.Tensor, final_logit: torch.Tensor) -> torch.Tensor:
+    """Compute KL-divergence distillation loss between off-ramp and final classifier.
+
+    Uses binary KL divergence: KL(p_ramp || p_final) where p = sigmoid(logit).
+    The final_logit is detached so gradients only flow through the ramp.
+
+    Args:
+        ramp_logit: Off-ramp logits, shape (batch,).
+        final_logit: Final classifier logits, shape (batch,). Will be detached.
+
+    Returns:
+        Scalar KL divergence loss (non-negative).
+    """
+    final_logit = final_logit.detach()
+    p_ramp = torch.sigmoid(ramp_logit)
+    p_final = torch.sigmoid(final_logit)
+    eps = 1e-7
+    p_ramp_clamped = p_ramp.clamp(eps, 1 - eps)
+    p_final_clamped = p_final.clamp(eps, 1 - eps)
+    kl = (
+        p_final_clamped * (p_final_clamped.log() - p_ramp_clamped.log())
+        + (1 - p_final_clamped) * ((1 - p_final_clamped).log() - (1 - p_ramp_clamped).log())
+    )
+    return kl.mean()
 
 
 def train_joint(
@@ -34,7 +60,9 @@ def train_joint(
     backbone_lr: float = 2e-5,
     offramp_lr: float = 1e-3,
     alpha: float = 1.0,
+    beta: float = 0.0,
     output_dir: str = "results",
+    output_weights_name: str | None = None,
     max_steps: int = -1,
 ):
     """Train backbone + off-ramps jointly with combined loss.
@@ -81,7 +109,7 @@ def train_joint(
         {"params": model.offramps.parameters(), "lr": offramp_lr},
     ])
 
-    print(f"Training jointly: backbone_lr={backbone_lr}, offramp_lr={offramp_lr}, alpha={alpha}")
+    print(f"Training jointly: backbone_lr={backbone_lr}, offramp_lr={offramp_lr}, alpha={alpha}, beta={beta}")
     print(f"Trainable params: backbone={sum(p.numel() for p in model.backbone.parameters()):,}, "
           f"offramps={sum(p.numel() for p in model.offramps.parameters()):,}")
 
@@ -103,10 +131,12 @@ def train_joint(
             # Final classifier loss
             final_loss = F.binary_cross_entropy_with_logits(out["final_logit"], b_labels)
 
-            # Off-ramp losses
+            # Off-ramp losses (BCE + optional KL distillation)
             ramp_losses = []
             for i, logit in enumerate(out["offramp_logits"]):
                 loss = F.binary_cross_entropy_with_logits(logit, b_labels)
+                if beta > 0:
+                    loss = loss + beta * compute_distill_loss(logit, out["final_logit"])
                 ramp_losses.append(loss)
                 running_ramp_losses[i] += loss.item()
 
@@ -141,7 +171,12 @@ def train_joint(
 
     # Save full model state (backbone + offramps)
     os.makedirs(output_dir, exist_ok=True)
-    save_path = os.path.join(output_dir, DEFAULT_JOINT_WEIGHTS_PATH.split("/")[-1])
+    if output_weights_name is None:
+        output_weights_name = (
+            DEFAULT_SYSTEM_E_WEIGHTS_PATH.split("/")[-1] if beta > 0
+            else DEFAULT_JOINT_WEIGHTS_PATH.split("/")[-1]
+        )
+    save_path = os.path.join(output_dir, output_weights_name)
     state = {
         "backbone": model.backbone.state_dict(),
         "offramps": model.offramps.state_dict(),
@@ -158,7 +193,9 @@ if __name__ == "__main__":
     parser.add_argument("--backbone_lr", type=float, default=2e-5)
     parser.add_argument("--offramp_lr", type=float, default=1e-3)
     parser.add_argument("--alpha", type=float, default=1.0)
+    parser.add_argument("--beta", type=float, default=0.0)
     parser.add_argument("--output_dir", type=str, default="results")
+    parser.add_argument("--output_weights_name", type=str, default=None)
     parser.add_argument("--max_steps", type=int, default=-1)
     args = parser.parse_args()
 
@@ -169,6 +206,8 @@ if __name__ == "__main__":
         backbone_lr=args.backbone_lr,
         offramp_lr=args.offramp_lr,
         alpha=args.alpha,
+        beta=args.beta,
         output_dir=args.output_dir,
+        output_weights_name=args.output_weights_name,
         max_steps=args.max_steps,
     )
