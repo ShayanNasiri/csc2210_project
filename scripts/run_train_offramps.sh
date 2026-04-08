@@ -8,4 +8,4 @@
 #SBATCH --output=results/train_offramps_%j.log
 
 source scripts/setup_env.sh
-python -m src.train_offramps --data_path data/msmarco_train.parquet --epochs 3 --batch_size 128
+python -m src.train_offramps --data_path data/msmarco_train_split.parquet --epochs 3 --batch_size 128

@@ -8,4 +8,4 @@
 #SBATCH --output=results/train_joint_%j.log
 
 source scripts/setup_env.sh
-python -m src.train_joint --data_path data/msmarco_train.parquet --epochs 3 --batch_size 32
+python -m src.train_joint --data_path data/msmarco_train_split.parquet --epochs 3 --batch_size 32
