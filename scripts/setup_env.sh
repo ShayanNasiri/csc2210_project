@@ -9,8 +9,10 @@ export TORCH_HOME=/tmp/torch_cache_$USER
 
 VENV_DIR=/tmp/venv_$USER
 
-# Rebuild venv if torch is missing or broken
-if [ ! -d "$VENV_DIR" ] || ! "$VENV_DIR/bin/python" -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
+# Rebuild venv if missing, CUDA broken, or key packages missing
+if [ ! -d "$VENV_DIR" ] \
+   || ! "$VENV_DIR/bin/python" -c "import torch; assert torch.cuda.is_available()" 2>/dev/null \
+   || ! "$VENV_DIR/bin/python" -c "import pandas, transformers, tqdm, scipy" 2>/dev/null; then
     echo "Creating virtual environment at $VENV_DIR ..."
     rm -rf "$VENV_DIR"
     python3 -m venv "$VENV_DIR"
