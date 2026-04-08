@@ -1,6 +1,8 @@
 """Tests for System D: joint backbone + off-ramp training."""
 
 import os
+import tempfile
+
 import pytest
 import torch
 import torch.nn.functional as F
@@ -212,3 +214,162 @@ class TestSystemDInference:
         from src.inference import run_system_d
         source = inspect.getsource(run_system_d)
         assert "joint_weights" in source or "joint" in source
+
+
+# ---- Training loop behavior tests ----
+
+class TestJointTrainingBehavior:
+    """Tests for joint training loop specifics."""
+
+    @pytest.fixture
+    def tiny_parquet(self, tmp_path):
+        """Create a small parquet file for training tests."""
+        import pandas as pd
+        df = pd.DataFrame({
+            "qid": ["q1"] * 4 + ["q2"] * 4,
+            "docid": [f"d{i}" for i in range(8)],
+            "query": ["what is python"] * 4 + ["what is java"] * 4,
+            "passage": [
+                "Python is a language", "Cats are cute",
+                "Python is great", "Dogs bark",
+                "Java is a language", "Birds fly",
+                "Java runs on JVM", "Fish swim",
+            ],
+            "label": [1, 0, 1, 0, 1, 0, 1, 0],
+        })
+        path = str(tmp_path / "tiny_train.parquet")
+        df.to_parquet(path, index=False)
+        return path
+
+    def test_alpha_zero_excludes_ramp_loss(self):
+        """With alpha=0, total_loss should equal final_loss only."""
+        from src.model import EarlyExitCrossEncoder
+        model = EarlyExitCrossEncoder(MODEL_NAME)
+
+        dummy_ids = torch.randint(0, 100, (2, 16))
+        dummy_mask = torch.ones(2, 16, dtype=torch.long)
+        labels = torch.tensor([0.0, 1.0])
+
+        with torch.no_grad():
+            out = model.forward_with_offramps(dummy_ids, dummy_mask)
+
+        final_loss = F.binary_cross_entropy_with_logits(out["final_logit"], labels)
+        ramp_losses = [
+            F.binary_cross_entropy_with_logits(logit, labels)
+            for logit in out["offramp_logits"]
+        ]
+        alpha = 0.0
+        total_loss = final_loss + alpha * sum(ramp_losses) / len(ramp_losses)
+
+        assert torch.allclose(total_loss, final_loss)
+
+    def test_alpha_scales_ramp_contribution(self):
+        """Higher alpha should increase total loss relative to final-only loss."""
+        from src.model import EarlyExitCrossEncoder
+        model = EarlyExitCrossEncoder(MODEL_NAME)
+
+        dummy_ids = torch.randint(0, 100, (2, 16))
+        dummy_mask = torch.ones(2, 16, dtype=torch.long)
+        labels = torch.tensor([0.0, 1.0])
+
+        with torch.no_grad():
+            out = model.forward_with_offramps(dummy_ids, dummy_mask)
+
+        final_loss = F.binary_cross_entropy_with_logits(out["final_logit"], labels)
+        ramp_losses = [
+            F.binary_cross_entropy_with_logits(logit, labels)
+            for logit in out["offramp_logits"]
+        ]
+        mean_ramp = sum(ramp_losses) / len(ramp_losses)
+
+        loss_a1 = final_loss + 1.0 * mean_ramp
+        loss_a2 = final_loss + 2.0 * mean_ramp
+
+        assert loss_a2.item() > loss_a1.item()
+
+    def test_cuda_guard_raises_on_cpu(self):
+        """train_joint must raise RuntimeError when CUDA is not available."""
+        from unittest.mock import patch
+        from src.train_joint import train_joint
+
+        with patch("src.train_joint.get_device", return_value=torch.device("cpu")):
+            with pytest.raises(RuntimeError, match="CUDA not available"):
+                train_joint(data_path="nonexistent.parquet", max_steps=1)
+
+    def test_train_joint_has_alpha_param(self):
+        """train_joint must accept alpha parameter for loss weighting."""
+        import inspect
+        from src.train_joint import train_joint
+        sig = inspect.signature(train_joint)
+        assert "alpha" in sig.parameters
+        assert sig.parameters["alpha"].default == 1.0
+
+    def test_train_joint_has_max_steps_param(self):
+        """train_joint must accept max_steps parameter for short runs."""
+        import inspect
+        from src.train_joint import train_joint
+        sig = inspect.signature(train_joint)
+        assert "max_steps" in sig.parameters
+        assert sig.parameters["max_steps"].default == -1
+
+    def test_weight_save_format(self):
+        """Joint weights file must contain backbone and offramps keys with correct sizes."""
+        from src.model import EarlyExitCrossEncoder
+        model = EarlyExitCrossEncoder(MODEL_NAME)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_path = os.path.join(tmpdir, "joint_weights.pt")
+            state = {
+                "backbone": model.backbone.state_dict(),
+                "offramps": model.offramps.state_dict(),
+            }
+            torch.save(state, save_path)
+
+            loaded = torch.load(save_path, weights_only=True)
+
+            # Backbone state dict should have many keys (100+)
+            assert len(loaded["backbone"]) > 50
+
+            # Off-ramp state dict: 5 ramps * (weight + bias) = 10 keys
+            assert len(loaded["offramps"]) == 10
+
+            # Weight shapes
+            for i in range(NUM_OFFRAMPS):
+                w_key = f"ramps.{i}.linear.weight"
+                b_key = f"ramps.{i}.linear.bias"
+                assert w_key in loaded["offramps"]
+                assert b_key in loaded["offramps"]
+                assert loaded["offramps"][w_key].shape == (1, HIDDEN_SIZE)
+                assert loaded["offramps"][b_key].shape == (1,)
+
+    def test_joint_weights_loadable_into_fresh_model(self):
+        """Joint weights must be loadable into a fresh EarlyExitCrossEncoder."""
+        from src.model import EarlyExitCrossEncoder
+        model = EarlyExitCrossEncoder(MODEL_NAME)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            save_path = os.path.join(tmpdir, "joint_weights.pt")
+            state = {
+                "backbone": model.backbone.state_dict(),
+                "offramps": model.offramps.state_dict(),
+            }
+            torch.save(state, save_path)
+
+            # Load into a fresh model (as System D inference does)
+            model2 = EarlyExitCrossEncoder(MODEL_NAME)
+            loaded = torch.load(save_path, weights_only=True)
+            model2.backbone.load_state_dict(loaded["backbone"])
+            model2.offramps.load_state_dict(loaded["offramps"])
+
+            # Verify outputs match
+            dummy_ids = torch.randint(0, 100, (2, 16))
+            dummy_mask = torch.ones(2, 16, dtype=torch.long)
+            with torch.no_grad():
+                out1 = model.forward_with_offramps(dummy_ids, dummy_mask)
+                out2 = model2.forward_with_offramps(dummy_ids, dummy_mask)
+
+            assert torch.allclose(out1["final_logit"], out2["final_logit"])
+            for i in range(NUM_OFFRAMPS):
+                assert torch.allclose(
+                    out1["offramp_logits"][i], out2["offramp_logits"][i]
+                )
