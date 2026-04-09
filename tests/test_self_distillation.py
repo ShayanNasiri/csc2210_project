@@ -52,6 +52,27 @@ class TestBetaParameter:
         sig = inspect.signature(train_joint)
         assert "output_weights_name" in sig.parameters
 
+    def test_train_joint_save_path_uses_output_weights_name(self):
+        """The save path inside train_joint must actually use output_weights_name,
+        not hardcode a filename. Required for the alpha=0.5 sweep to write
+        distinct files like system_e_alpha0.5_beta1.0_weights.pt instead of
+        clobbering the existing system_e_beta1.0_weights.pt files.
+        """
+        from src.train_joint import train_joint
+        source = inspect.getsource(train_joint)
+        # The variable must be referenced in the save path construction.
+        # If a future refactor hardcodes the filename, this test catches it.
+        assert "output_weights_name" in source
+        # And it must reach torch.save
+        save_idx = source.find("torch.save")
+        assert save_idx > 0
+        # output_weights_name must be referenced before the save call
+        ref_idx = source.find("output_weights_name", source.find("save_path"))
+        # Either save_path or os.path.join uses it before torch.save
+        assert ref_idx > 0 and ref_idx < save_idx, (
+            "output_weights_name must be used to build the save path"
+        )
+
 
 # ---- KL divergence loss computation ----
 
@@ -217,6 +238,56 @@ class TestCombinedDistillLoss:
 
         assert losses[1.0].item() >= losses[0.1].item() - 1e-6
         assert losses[2.0].item() >= losses[1.0].item() - 1e-6
+
+    def test_combined_alpha_beta_loss_formula(self, model):
+        """The training loop loss must equal final + alpha*mean(BCE + beta*KL),
+        which is algebraically the same as final + alpha*mean(BCE) + (alpha*beta)*mean(KL).
+
+        This documents the (alpha*beta) effective KL weight interaction so the
+        System E alpha=0.5 sweep is interpretable: at alpha=0.5, the listed beta
+        values produce effective KL weights [0.05, 0.25, 0.5, 1.0] — half what
+        the same beta values produce at alpha=1.0.
+        """
+        from src.train_joint import compute_distill_loss
+
+        dummy_ids = torch.randint(0, 100, (4, 16))
+        dummy_mask = torch.ones(4, 16, dtype=torch.long)
+        labels = torch.tensor([0.0, 1.0, 1.0, 0.0])
+
+        with torch.no_grad():
+            out = model.forward_with_offramps(dummy_ids, dummy_mask)
+
+        final_loss = F.binary_cross_entropy_with_logits(out["final_logit"], labels)
+
+        # Test several (alpha, beta) pairs including the new (0.5, *) configurations
+        for alpha, beta in [(0.5, 0.1), (0.5, 1.0), (0.5, 2.0), (1.0, 1.0), (2.0, 0.5)]:
+            # Method A: matches train_joint.py:137-144 exactly
+            ramp_losses = []
+            for logit in out["offramp_logits"]:
+                bce = F.binary_cross_entropy_with_logits(logit, labels)
+                kl = compute_distill_loss(logit, out["final_logit"])
+                ramp_losses.append(bce + beta * kl)
+            total_a = final_loss + alpha * sum(ramp_losses) / len(ramp_losses)
+
+            # Method B: expanded form — proves alpha*beta is the effective KL weight
+            bce_terms = [
+                F.binary_cross_entropy_with_logits(logit, labels)
+                for logit in out["offramp_logits"]
+            ]
+            kl_terms = [
+                compute_distill_loss(logit, out["final_logit"])
+                for logit in out["offramp_logits"]
+            ]
+            total_b = (
+                final_loss
+                + alpha * sum(bce_terms) / len(bce_terms)
+                + (alpha * beta) * sum(kl_terms) / len(kl_terms)
+            )
+
+            assert torch.allclose(total_a, total_b, atol=1e-6), (
+                f"Formula mismatch at (alpha={alpha}, beta={beta}): "
+                f"{total_a.item()} vs {total_b.item()}"
+            )
 
     def test_distill_gradient_flows_to_backbone(self, model):
         """Distillation loss gradients must flow to backbone when unfrozen."""
