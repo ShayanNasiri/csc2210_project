@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition=gpunodes
-#SBATCH --gres=gpu:rtx_4090:1
-#SBATCH --exclude=gpunode4,gpunode5,gpunode7
+#SBATCH --gres=gpu:1
+#SBATCH --exclude=gpunode4,gpunode5,gpunode7,gpunode13,gpunode1,gpunode28,gpunode6,gpunode11
 #SBATCH -c 4
 #SBATCH --mem=48G
 #SBATCH -t 24:00:00
