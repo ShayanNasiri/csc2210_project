@@ -282,12 +282,14 @@ def run_system_d(
     batch_size: int = DEFAULT_BATCH_SIZE,
     thresholds: list | None = None,
     output_dir: str = DEFAULT_RESULTS_DIR,
+    weights_path: str | None = None,
     results_tag: str = "",
 ) -> list:
     """Run System D: jointly-trained model with Triton-compacted early exit.
 
-    Uses joint_weights.pt (backbone + offramps trained together) instead of
-    the frozen-backbone offramp_weights.pt.
+    Uses joint_weights.pt by default (backbone + offramps trained together with
+    alpha=1.0). For the alpha sweep, pass a custom `weights_path` such as
+    `results/joint_alpha0.5_weights.pt`.
 
     Returns a list of result dicts, one per threshold.
     """
@@ -299,8 +301,9 @@ def run_system_d(
 
     # Load model + joint weights (backbone + offramps)
     model = EarlyExitCrossEncoder()
-    joint_weights_path = os.path.join(output_dir, "joint_weights.pt")
-    state = torch.load(joint_weights_path, map_location=device, weights_only=True)
+    if weights_path is None:
+        weights_path = os.path.join(output_dir, "joint_weights.pt")
+    state = torch.load(weights_path, map_location=device, weights_only=True)
     model.backbone.load_state_dict(state["backbone"])
     model.offramps.load_state_dict(state["offramps"])
     model.to(device)
@@ -647,6 +650,7 @@ if __name__ == "__main__":
             tokenized_path=args.data_path,
             batch_size=args.batch_size,
             output_dir=args.output_dir,
+            weights_path=args.weights_path,
             results_tag=args.results_tag,
         )
     elif args.system == "system_e":

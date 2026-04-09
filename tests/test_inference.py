@@ -215,3 +215,28 @@ class TestSystemDWeightLoading:
         """Result dict must have system='system_d'."""
         source = inspect.getsource(__import__("src.inference", fromlist=["run_system_d"]).run_system_d)
         assert '"system_d"' in source
+
+    def test_run_system_d_has_weights_path_param(self):
+        """run_system_d must accept a weights_path parameter (mirrors System E for alpha sweep)."""
+        from src.inference import run_system_d
+        sig = inspect.signature(run_system_d)
+        assert "weights_path" in sig.parameters
+
+    def test_run_system_d_weights_path_default_is_none(self):
+        """weights_path must default to None so existing call sites keep using joint_weights.pt."""
+        from src.inference import run_system_d
+        sig = inspect.signature(run_system_d)
+        assert sig.parameters["weights_path"].default is None
+
+    def test_run_system_d_uses_weights_path_when_provided(self):
+        """run_system_d source must reference weights_path (not just hardcoded joint_weights.pt)."""
+        source = inspect.getsource(__import__("src.inference", fromlist=["run_system_d"]).run_system_d)
+        assert "weights_path" in source
+
+    def test_cli_dispatcher_passes_weights_path_to_system_d(self):
+        """CLI dispatcher must forward --weights_path to run_system_d (not just system_e)."""
+        import src.inference as inf
+        cli_source = inspect.getsource(inf)
+        # Find the system_d branch and verify weights_path is passed
+        system_d_branch = cli_source.split('elif args.system == "system_d":')[1].split("elif args.system ==")[0]
+        assert "weights_path=args.weights_path" in system_d_branch
