@@ -1,4 +1,6 @@
 import argparse
+import csv
+import itertools
 import os
 import statistics
 
@@ -10,11 +12,13 @@ from src.constants import (
     MODEL_NAME,
     NUM_OFFRAMPS,
     DEFAULT_DEV_DATA_PATH,
+    DEFAULT_VAL_DATA_PATH,
     DEFAULT_RESULTS_DIR,
     DEFAULT_BATCH_SIZE,
     DEFAULT_ENTROPY_THRESHOLDS,
     DEFAULT_JOINT_WEIGHTS_PATH,
     DEFAULT_SYSTEM_E_WEIGHTS_PATH,
+    DEFAULT_PER_RAMP_GRID,
     WARMUP_BATCHES,
     TIMED_BATCH_LIMIT,
 )
@@ -462,6 +466,157 @@ def run_system_e(
     return all_results
 
 
+def run_per_ramp_threshold_sweep(
+    task_id: int = 0,
+    num_tasks: int = 49,
+    grid_values: list | None = None,
+    weights_path: str = "results/joint_alpha0.5_weights.pt",
+    tokenized_path: str = DEFAULT_VAL_DATA_PATH,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    output_dir: str = DEFAULT_RESULTS_DIR,
+) -> str:
+    """System F: per-ramp entropy threshold grid sweep over System D alpha=0.5.
+
+    Partitions the full grid_size**5 grid by (t0, t1) so each task processes
+    grid_size**3 configs. With the default 7-value grid, num_tasks=49 (7x7) and
+    each task evaluates 343 configs. task_id maps to (t0_idx, t1_idx) via
+    integer division and modulo.
+
+    Each task writes a CSV to results/sweep_results/system_f_t0=<t0>_t1=<t1>.csv
+    with one row per (t2, t3, t4) combination. The model, weights, and val data
+    are loaded once per task; warmup runs once before the inner loop.
+    """
+    if grid_values is None:
+        grid_values = DEFAULT_PER_RAMP_GRID
+
+    grid_size = len(grid_values)
+    expected_tasks = grid_size * grid_size
+    if num_tasks != expected_tasks:
+        raise ValueError(
+            f"num_tasks must be {expected_tasks} for grid size {grid_size}, "
+            f"got {num_tasks}"
+        )
+    if not (0 <= task_id < num_tasks):
+        raise ValueError(f"task_id must be in [0, {num_tasks}), got {task_id}")
+
+    t0_idx = task_id // grid_size
+    t1_idx = task_id % grid_size
+    t0 = grid_values[t0_idx]
+    t1 = grid_values[t1_idx]
+
+    set_seed()
+    device = get_device()
+
+    # Load model + System D alpha=0.5 weights
+    model = EarlyExitCrossEncoder()
+    state = torch.load(weights_path, map_location=device, weights_only=True)
+    model.backbone.load_state_dict(state["backbone"])
+    model.offramps.load_state_dict(state["offramps"])
+    model.to(device)
+    model.eval()
+
+    # Load val data once
+    data = load_tokenized_data(tokenized_path)
+    num_samples = data["input_ids"].shape[0]
+
+    runner = BatchRunner(
+        num_samples=num_samples,
+        batch_size=batch_size,
+        warmup_batches=WARMUP_BATCHES,
+        timed_batch_limit=TIMED_BATCH_LIMIT,
+    )
+
+    # Output directory + CSV path with distinctive (t0, t1) filename
+    sweep_dir = os.path.join(output_dir, "sweep_results")
+    os.makedirs(sweep_dir, exist_ok=True)
+    csv_path = os.path.join(sweep_dir, f"system_f_t0={t0}_t1={t1}.csv")
+
+    fieldnames = [
+        "t0", "t1", "t2", "t3", "t4",
+        "mrr10", "mean_batch_latency_ms",
+        "exit_count_0", "exit_count_1", "exit_count_2",
+        "exit_count_3", "exit_count_4", "exit_count_5",
+    ]
+
+    # Warmup once with a representative threshold vector
+    warmup_thresholds = [t0, t1, grid_values[0], grid_values[0], grid_values[0]]
+
+    def warmup_fn(input_ids, attention_mask, token_type_ids, _t=warmup_thresholds):
+        return model.forward_compacted_early_exit(
+            input_ids, attention_mask, token_type_ids, entropy_threshold=_t
+        )
+
+    with torch.no_grad():
+        runner.warmup(data, device, warmup_fn)
+
+    # Inner sub-grid: (t2, t3, t4) — grid_size**3 configs
+    sub_grid = list(itertools.product(grid_values, repeat=3))
+    print(
+        f"[task {task_id}/{num_tasks}] t0={t0} t1={t1} — "
+        f"{len(sub_grid)} configs -> {csv_path}"
+    )
+
+    rows_written = 0
+    flush_every = 25
+
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        f.flush()
+
+        for t2, t3, t4 in sub_grid:
+            thresholds_vec = [t0, t1, t2, t3, t4]
+
+            def forward_fn(
+                input_ids, attention_mask, token_type_ids, _t=thresholds_vec
+            ):
+                return model.forward_compacted_early_exit(
+                    input_ids, attention_mask, token_type_ids, entropy_threshold=_t
+                )
+
+            with torch.no_grad():
+                all_outputs, batch_latencies = runner.run_with_timing(
+                    data, device, forward_fn
+                )
+
+            all_scores = []
+            global_exit_counts = [0] * (NUM_OFFRAMPS + 1)
+            for out in all_outputs:
+                all_scores.extend(out["scores"].cpu().tolist())
+                for j in range(NUM_OFFRAMPS + 1):
+                    global_exit_counts[j] += out["exit_counts"][j]
+
+            mean_lat = sum(batch_latencies) / len(batch_latencies)
+            mrr10 = compute_mrr_at_k(data["qids"], all_scores, data["labels"], k=10)
+
+            row = {
+                "t0": t0, "t1": t1, "t2": t2, "t3": t3, "t4": t4,
+                "mrr10": mrr10,
+                "mean_batch_latency_ms": mean_lat,
+                "exit_count_0": global_exit_counts[0],
+                "exit_count_1": global_exit_counts[1],
+                "exit_count_2": global_exit_counts[2],
+                "exit_count_3": global_exit_counts[3],
+                "exit_count_4": global_exit_counts[4],
+                "exit_count_5": global_exit_counts[5],
+            }
+            writer.writerow(row)
+            rows_written += 1
+
+            if rows_written % flush_every == 0:
+                f.flush()
+                print(
+                    f"  [{rows_written}/{len(sub_grid)}] "
+                    f"({t2}, {t3}, {t4}) MRR={mrr10:.4f} "
+                    f"lat={mean_lat:.2f}ms"
+                )
+
+        f.flush()
+
+    print(f"[task {task_id}] DONE — {rows_written} rows -> {csv_path}")
+    return csv_path
+
+
 DEFAULT_SWEEP_SYSTEMS = ["baseline_a", "baseline_b", "system_c"]
 DEFAULT_SWEEP_BATCH_SIZES = [32, 64, 128, 256, 512]
 
@@ -622,6 +777,10 @@ if __name__ == "__main__":
     parser.add_argument("--weights_path", type=str, default=None)
     parser.add_argument("--results_tag", type=str, default="",
                         help="Prefix for result filenames, e.g. 'val_' or 'test_'")
+    parser.add_argument("--task_id", type=int, default=0,
+                        help="Array task ID for per_ramp_sweep (0-indexed)")
+    parser.add_argument("--num_tasks", type=int, default=49,
+                        help="Total number of array tasks for per_ramp_sweep")
     args = parser.parse_args()
 
     if args.system == "baseline_a":
@@ -664,5 +823,18 @@ if __name__ == "__main__":
     elif args.system == "full_sweep":
         run_full_sweep(
             tokenized_path=args.data_path,
+            output_dir=args.output_dir,
+        )
+    elif args.system == "per_ramp_sweep":
+        run_per_ramp_threshold_sweep(
+            task_id=args.task_id,
+            num_tasks=args.num_tasks,
+            weights_path=(
+                args.weights_path
+                if args.weights_path is not None
+                else "results/joint_alpha0.5_weights.pt"
+            ),
+            tokenized_path=args.data_path,
+            batch_size=args.batch_size,
             output_dir=args.output_dir,
         )

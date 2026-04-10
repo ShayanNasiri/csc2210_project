@@ -23,3 +23,6 @@ DEFAULT_SYSTEM_E_WEIGHTS_PATH = "results/system_e_joint_distill_weights.pt"
 
 # Default thresholds for Baseline B
 DEFAULT_ENTROPY_THRESHOLDS = [0.01, 0.05, 0.1, 0.2, 0.3, 0.5]
+
+# Per-ramp threshold grid for System F sweep (log-spaced 7 values, ~3x steps)
+DEFAULT_PER_RAMP_GRID = [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 0.5]
