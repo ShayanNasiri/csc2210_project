@@ -1,3 +1,5 @@
+from typing import Sequence, Union
+
 import torch
 import torch.nn as nn
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -123,16 +125,44 @@ class EarlyExitCrossEncoder(nn.Module):
         input_ids,
         attention_mask,
         token_type_ids=None,
-        entropy_threshold: float = 0.1,
+        entropy_threshold: Union[float, Sequence[float]] = 0.1,
     ):
         """System C early-exit inference. Exited docs are physically removed from
         the batch via Triton compaction, eliminating wasted compute on padding.
+
+        ``entropy_threshold`` is either a single float (broadcast to all
+        ``NUM_OFFRAMPS`` off-ramps, current behavior) or a length-``NUM_OFFRAMPS``
+        sequence of floats (System F: one threshold per off-ramp). Sequences of
+        any other length raise ``ValueError``; non-numeric, non-sequence inputs
+        raise ``TypeError``.
 
         Returns dict with:
             scores:      (batch,) final relevance score for each doc
             exit_layer:  (batch,) int tensor, 0-4 = off-ramp index, 5 = full forward
             exit_counts: list of 6 ints — docs exiting at each point
         """
+        # Normalize entropy_threshold to a length-NUM_OFFRAMPS list of floats.
+        # bool is excluded because bool is an int subclass and accepting it
+        # would silently coerce True/False into 1.0/0.0 — almost certainly a bug.
+        if isinstance(entropy_threshold, bool):
+            raise TypeError(
+                f"entropy_threshold must be float or sequence of float, got bool"
+            )
+        if isinstance(entropy_threshold, (int, float)):
+            thresholds = [float(entropy_threshold)] * NUM_OFFRAMPS
+        elif isinstance(entropy_threshold, (list, tuple)):
+            if len(entropy_threshold) != NUM_OFFRAMPS:
+                raise ValueError(
+                    f"entropy_threshold sequence must have length {NUM_OFFRAMPS}, "
+                    f"got {len(entropy_threshold)}"
+                )
+            thresholds = [float(t) for t in entropy_threshold]
+        else:
+            raise TypeError(
+                f"entropy_threshold must be float or sequence of float, "
+                f"got {type(entropy_threshold).__name__}"
+            )
+
         batch_size = input_ids.shape[0]
         device = input_ids.device
 
@@ -154,7 +184,7 @@ class EarlyExitCrossEncoder(nn.Module):
             if i < NUM_OFFRAMPS:
                 logit = self.offramps(i, hidden_states)
                 entropy = self.offramps.ramps[i].compute_entropy(logit)
-                exited = entropy < entropy_threshold
+                exited = entropy < thresholds[i]
 
                 if exited.any():
                     # Record scores and exit info for exited items
