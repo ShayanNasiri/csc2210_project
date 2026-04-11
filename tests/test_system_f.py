@@ -164,69 +164,9 @@ class TestForwardCompactedEarlyExitPerRampThresholds:
 # All GPU-heavy dependencies are mocked so the tests run on any machine.
 
 class TestRunPerRampThresholdSweep:
-
-    @pytest.fixture
-    def mocked_sweep_env(self, monkeypatch, tmp_path):
-        """Patch GPU-heavy dependencies of run_per_ramp_threshold_sweep so tests
-        only exercise partitioning, validation, and CSV writing. Returns the
-        tmp_path that should be passed as ``output_dir``.
-        """
-        import src.inference as inf
-
-        class _FakeStateDictHolder:
-            def load_state_dict(self, _state):
-                pass
-
-        class _FakeModel:
-            def __init__(self):
-                self.backbone = _FakeStateDictHolder()
-                self.offramps = _FakeStateDictHolder()
-
-            def to(self, _device):
-                return self
-
-            def eval(self):
-                return self
-
-            def forward_compacted_early_exit(self, *_a, **_k):
-                return {
-                    "scores": torch.zeros(1),
-                    "exit_counts": [1, 0, 0, 0, 0, 0],
-                    "exit_layer": torch.zeros(1, dtype=torch.long),
-                }
-
-        monkeypatch.setattr(inf, "EarlyExitCrossEncoder", _FakeModel)
-        monkeypatch.setattr(
-            torch, "load", lambda *a, **k: {"backbone": {}, "offramps": {}}
-        )
-
-        fake_data = {
-            "input_ids": torch.zeros(2, 4, dtype=torch.long),
-            "attention_mask": torch.zeros(2, 4, dtype=torch.long),
-            "token_type_ids": torch.zeros(2, 4, dtype=torch.long),
-            "qids": [0, 0],
-            "labels": [1, 0],
-        }
-        monkeypatch.setattr(inf, "load_tokenized_data", lambda *a, **k: fake_data)
-
-        class _FakeBatchRunner:
-            def __init__(self, *a, **k):
-                pass
-
-            def warmup(self, *a, **k):
-                pass
-
-            def run_with_timing(self, *a, **k):
-                fake_out = {
-                    "scores": torch.zeros(2),
-                    "exit_counts": [2, 0, 0, 0, 0, 0],
-                }
-                return [fake_out], [1.0]
-
-        monkeypatch.setattr(inf, "BatchRunner", _FakeBatchRunner)
-        monkeypatch.setattr(inf, "compute_mrr_at_k", lambda *a, **k: 0.0)
-
-        return tmp_path
+    """Sweep-driver contract tests. The ``mocked_sweep_env`` fixture lives in
+    tests/conftest.py because tests/test_system_g.py reuses it for its
+    end-to-end layout test."""
 
     def test_per_ramp_sweep_partitioning_covers_full_grid(self, mocked_sweep_env):
         """task_id 0..N*N-1 must produce N*N unique (t0, t1) cells covering the
@@ -307,3 +247,91 @@ class TestRunPerRampThresholdSweep:
 
         with pytest.raises(ValueError, match="task_id must be in"):
             run_per_ramp_threshold_sweep(task_id=-1, num_tasks=49)
+
+    # ---------------------------------------------------------------------
+    # sweep_subdir / csv_prefix parameterization
+    # ---------------------------------------------------------------------
+    #
+    # The sweep driver must accept ``sweep_subdir`` and ``csv_prefix`` kwargs
+    # so other weight families (e.g. the System E β=1.0 weights used by the
+    # planned System G sweep) can run the same grid without colliding with
+    # System F's already-committed CSVs at
+    # ``results/system_f_sweep_results/system_f_t0=*.csv``.
+    #
+    # Default values must reproduce the System F layout exactly so re-running
+    # the System F sweep produces a byte-identical directory tree to what is
+    # currently committed in the repo.
+
+    def test_per_ramp_sweep_default_subdir_and_prefix(self, mocked_sweep_env):
+        """Default kwargs must produce the System F layout exactly:
+        ``<output_dir>/system_f_sweep_results/system_f_t0=<t0>_t1=<t1>.csv``.
+        Guards against accidental drift in the committed System F path.
+        """
+        from src.inference import run_per_ramp_threshold_sweep
+
+        csv_path = run_per_ramp_threshold_sweep(
+            task_id=0,
+            num_tasks=4,
+            grid_values=[0.01, 0.5],
+            output_dir=str(mocked_sweep_env),
+        )
+
+        expected_subdir = os.path.join(str(mocked_sweep_env), "system_f_sweep_results")
+        assert os.path.dirname(csv_path) == expected_subdir, (
+            f"Default subdir drift. Expected {expected_subdir}, "
+            f"got {os.path.dirname(csv_path)}"
+        )
+        assert os.path.basename(csv_path) == "system_f_t0=0.01_t1=0.01.csv", (
+            f"Default csv_prefix drift. Expected system_f_t0=0.01_t1=0.01.csv, "
+            f"got {os.path.basename(csv_path)}"
+        )
+        assert os.path.isfile(csv_path), f"CSV not written to {csv_path}"
+
+    def test_per_ramp_sweep_custom_subdir_isolated_from_default(self, mocked_sweep_env):
+        """A custom ``sweep_subdir`` must place the CSV under that directory
+        and must NOT touch the default System F subdir as a side effect."""
+        from src.inference import run_per_ramp_threshold_sweep
+
+        csv_path = run_per_ramp_threshold_sweep(
+            task_id=0,
+            num_tasks=4,
+            grid_values=[0.01, 0.5],
+            output_dir=str(mocked_sweep_env),
+            sweep_subdir="some_other_subdir",
+        )
+
+        expected_subdir = os.path.join(str(mocked_sweep_env), "some_other_subdir")
+        assert os.path.dirname(csv_path) == expected_subdir, (
+            f"Custom sweep_subdir not honored. Expected {expected_subdir}, "
+            f"got {os.path.dirname(csv_path)}"
+        )
+        assert os.path.isfile(csv_path)
+        # Default csv_prefix is still system_f when only subdir is overridden
+        assert os.path.basename(csv_path).startswith("system_f_t0="), (
+            "csv_prefix should remain 'system_f' when only sweep_subdir is overridden"
+        )
+        # The default System F subdir must NOT have been created
+        assert not os.path.isdir(
+            os.path.join(str(mocked_sweep_env), "system_f_sweep_results")
+        ), "Custom sweep_subdir leaked into default system_f_sweep_results dir"
+
+    def test_per_ramp_sweep_custom_csv_prefix(self, mocked_sweep_env):
+        """A custom ``csv_prefix`` must change the filename stem while leaving
+        the default subdir alone."""
+        from src.inference import run_per_ramp_threshold_sweep
+
+        csv_path = run_per_ramp_threshold_sweep(
+            task_id=2,
+            num_tasks=4,
+            grid_values=[0.01, 0.5],
+            output_dir=str(mocked_sweep_env),
+            csv_prefix="my_custom_prefix",
+        )
+
+        # task_id=2 with grid [0.01, 0.5] -> t0_idx=1, t1_idx=0 -> (0.5, 0.01)
+        assert os.path.basename(csv_path) == "my_custom_prefix_t0=0.5_t1=0.01.csv", (
+            f"Custom csv_prefix not honored. Got {os.path.basename(csv_path)}"
+        )
+        # Subdir defaults to system_f_sweep_results when only csv_prefix is overridden
+        assert os.path.basename(os.path.dirname(csv_path)) == "system_f_sweep_results"
+        assert os.path.isfile(csv_path)

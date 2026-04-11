@@ -474,17 +474,27 @@ def run_per_ramp_threshold_sweep(
     tokenized_path: str = DEFAULT_VAL_DATA_PATH,
     batch_size: int = DEFAULT_BATCH_SIZE,
     output_dir: str = DEFAULT_RESULTS_DIR,
+    sweep_subdir: str = "system_f_sweep_results",
+    csv_prefix: str = "system_f",
 ) -> str:
-    """System F: per-ramp entropy threshold grid sweep over System D alpha=0.5.
+    """Per-ramp entropy threshold grid sweep over a given weights file.
 
     Partitions the full grid_size**5 grid by (t0, t1) so each task processes
     grid_size**3 configs. With the default 7-value grid, num_tasks=49 (7x7) and
     each task evaluates 343 configs. task_id maps to (t0_idx, t1_idx) via
     integer division and modulo.
 
-    Each task writes a CSV to results/sweep_results/system_f_t0=<t0>_t1=<t1>.csv
-    with one row per (t2, t3, t4) combination. The model, weights, and val data
-    are loaded once per task; warmup runs once before the inner loop.
+    Each task writes a CSV to
+    ``<output_dir>/<sweep_subdir>/<csv_prefix>_t0=<t0>_t1=<t1>.csv``
+    with one row per (t2, t3, t4) combination. The model, weights, and val
+    data are loaded once per task; warmup runs once before the inner loop.
+
+    The default ``sweep_subdir`` and ``csv_prefix`` reproduce the System F
+    layout already committed under ``results/system_f_sweep_results/``. Other
+    weight families (e.g. System G runs on System E β=1.0 weights) override
+    both kwargs to land their CSVs in an isolated subdirectory with a
+    distinctive filename prefix, so a re-run can never overwrite committed
+    System F outputs.
     """
     if grid_values is None:
         grid_values = DEFAULT_PER_RAMP_GRID
@@ -526,10 +536,13 @@ def run_per_ramp_threshold_sweep(
         timed_batch_limit=TIMED_BATCH_LIMIT,
     )
 
-    # Output directory + CSV path with distinctive (t0, t1) filename
-    sweep_dir = os.path.join(output_dir, "sweep_results")
+    # Output directory + CSV path with distinctive (t0, t1) filename.
+    # sweep_subdir and csv_prefix are parameterized so the same driver can
+    # serve System F (default), System G (System E β=1.0 weights), or any
+    # future weight family without colliding output paths.
+    sweep_dir = os.path.join(output_dir, sweep_subdir)
     os.makedirs(sweep_dir, exist_ok=True)
-    csv_path = os.path.join(sweep_dir, f"system_f_t0={t0}_t1={t1}.csv")
+    csv_path = os.path.join(sweep_dir, f"{csv_prefix}_t0={t0}_t1={t1}.csv")
 
     fieldnames = [
         "t0", "t1", "t2", "t3", "t4",
@@ -781,6 +794,10 @@ if __name__ == "__main__":
                         help="Array task ID for per_ramp_sweep (0-indexed)")
     parser.add_argument("--num_tasks", type=int, default=49,
                         help="Total number of array tasks for per_ramp_sweep")
+    parser.add_argument("--sweep_subdir", type=str, default="system_f_sweep_results",
+                        help="Subdirectory under --output_dir for per_ramp_sweep CSVs")
+    parser.add_argument("--csv_prefix", type=str, default="system_f",
+                        help="Filename prefix for per_ramp_sweep CSVs (before _t0=...)")
     args = parser.parse_args()
 
     if args.system == "baseline_a":
@@ -837,4 +854,6 @@ if __name__ == "__main__":
             tokenized_path=args.data_path,
             batch_size=args.batch_size,
             output_dir=args.output_dir,
+            sweep_subdir=args.sweep_subdir,
+            csv_prefix=args.csv_prefix,
         )
