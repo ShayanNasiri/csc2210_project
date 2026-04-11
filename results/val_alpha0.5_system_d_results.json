@@ -1,0 +1,98 @@
+[
+  {
+    "system": "system_d",
+    "threshold": 0.01,
+    "mrr10": 0.3637860082304527,
+    "mean_batch_latency_ms": 16.13622952461243,
+    "total_latency_s": 1.6136229524612427,
+    "batch_size": 64,
+    "exit_counts": [
+      19262,
+      16857,
+      8184,
+      1978,
+      1216,
+      1351
+    ]
+  },
+  {
+    "system": "system_d",
+    "threshold": 0.05,
+    "mrr10": 0.04387860082304527,
+    "mean_batch_latency_ms": 7.02607521533966,
+    "total_latency_s": 0.7026075215339661,
+    "batch_size": 64,
+    "exit_counts": [
+      48848,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "system": "system_d",
+    "threshold": 0.1,
+    "mrr10": 0.04387860082304527,
+    "mean_batch_latency_ms": 7.035807032585144,
+    "total_latency_s": 0.7035807032585144,
+    "batch_size": 64,
+    "exit_counts": [
+      48848,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "system": "system_d",
+    "threshold": 0.2,
+    "mrr10": 0.04387860082304527,
+    "mean_batch_latency_ms": 7.040137286186218,
+    "total_latency_s": 0.7040137286186219,
+    "batch_size": 64,
+    "exit_counts": [
+      48848,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "system": "system_d",
+    "threshold": 0.3,
+    "mrr10": 0.04387860082304527,
+    "mean_batch_latency_ms": 7.042726073265076,
+    "total_latency_s": 0.7042726073265075,
+    "batch_size": 64,
+    "exit_counts": [
+      48848,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "system": "system_d",
+    "threshold": 0.5,
+    "mrr10": 0.04387860082304527,
+    "mean_batch_latency_ms": 7.0593484687805175,
+    "total_latency_s": 0.7059348468780517,
+    "batch_size": 64,
+    "exit_counts": [
+      48848,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+]

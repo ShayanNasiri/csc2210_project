@@ -1,0 +1,18 @@
+[
+  {
+    "system": "baseline_b",
+    "threshold": 0.1,
+    "mrr10": 0.07575364823348694,
+    "mean_batch_latency_ms": 47.41122837066651,
+    "total_latency_s": 4.7411228370666505,
+    "batch_size": 8,
+    "exit_counts": [
+      62357,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+]

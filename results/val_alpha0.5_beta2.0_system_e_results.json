@@ -1,0 +1,104 @@
+[
+  {
+    "system": "system_e",
+    "weights": "system_e_alpha0.5_beta2.0_weights.pt",
+    "threshold": 0.01,
+    "mrr10": 0.3271604938271605,
+    "mean_batch_latency_ms": 14.56480134010315,
+    "total_latency_s": 1.4564801340103148,
+    "batch_size": 64,
+    "exit_counts": [
+      25080,
+      13731,
+      6684,
+      1462,
+      632,
+      1259
+    ]
+  },
+  {
+    "system": "system_e",
+    "weights": "system_e_alpha0.5_beta2.0_weights.pt",
+    "threshold": 0.05,
+    "mrr10": 0.06527777777777778,
+    "mean_batch_latency_ms": 8.028907833099366,
+    "total_latency_s": 0.8028907833099366,
+    "batch_size": 64,
+    "exit_counts": [
+      47622,
+      659,
+      323,
+      88,
+      42,
+      114
+    ]
+  },
+  {
+    "system": "system_e",
+    "weights": "system_e_alpha0.5_beta2.0_weights.pt",
+    "threshold": 0.1,
+    "mrr10": 0.03389917695473251,
+    "mean_batch_latency_ms": 6.998910698890686,
+    "total_latency_s": 0.6998910698890686,
+    "batch_size": 64,
+    "exit_counts": [
+      48802,
+      28,
+      11,
+      0,
+      1,
+      6
+    ]
+  },
+  {
+    "system": "system_e",
+    "weights": "system_e_alpha0.5_beta2.0_weights.pt",
+    "threshold": 0.2,
+    "mrr10": 0.03389917695473251,
+    "mean_batch_latency_ms": 6.986890878677368,
+    "total_latency_s": 0.6986890878677369,
+    "batch_size": 64,
+    "exit_counts": [
+      48848,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "system": "system_e",
+    "weights": "system_e_alpha0.5_beta2.0_weights.pt",
+    "threshold": 0.3,
+    "mrr10": 0.03389917695473251,
+    "mean_batch_latency_ms": 7.004442901611328,
+    "total_latency_s": 0.7004442901611329,
+    "batch_size": 64,
+    "exit_counts": [
+      48848,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "system": "system_e",
+    "weights": "system_e_alpha0.5_beta2.0_weights.pt",
+    "threshold": 0.5,
+    "mrr10": 0.03389917695473251,
+    "mean_batch_latency_ms": 7.008379821777344,
+    "total_latency_s": 0.7008379821777344,
+    "batch_size": 64,
+    "exit_counts": [
+      48848,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+]

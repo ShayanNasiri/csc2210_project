@@ -7,8 +7,16 @@ __pycache__/
 data/*.parquet
 data/*.pt
 
-# Results (generated at runtime)
-results/
+# Results: CSVs / JSONs / logs are kept in-repo for reviewer audit.
+# Weights (.pt, regenerable from training scripts) are excluded — too
+# large for git. Plots (.png / .jpg / .pdf / .svg) are also excluded
+# until the final review pass — they will be added later.
+results/**/*.pt
+results/**/*.png
+results/**/*.jpg
+results/**/*.jpeg
+results/**/*.pdf
+results/**/*.svg
 
 # Nsight reports
 *.ncu-rep

@@ -1,0 +1,104 @@
+[
+  {
+    "system": "system_e",
+    "weights": "system_e_beta0.5_weights.pt",
+    "threshold": 0.01,
+    "mrr10": 0.34737654320987654,
+    "mean_batch_latency_ms": 15.014981451034545,
+    "total_latency_s": 1.5014981451034546,
+    "batch_size": 64,
+    "exit_counts": [
+      23527,
+      15824,
+      5982,
+      1365,
+      1007,
+      1143
+    ]
+  },
+  {
+    "system": "system_e",
+    "weights": "system_e_beta0.5_weights.pt",
+    "threshold": 0.05,
+    "mrr10": 0.06473398001175779,
+    "mean_batch_latency_ms": 8.095744638442993,
+    "total_latency_s": 0.8095744638442993,
+    "batch_size": 64,
+    "exit_counts": [
+      47669,
+      637,
+      328,
+      82,
+      52,
+      80
+    ]
+  },
+  {
+    "system": "system_e",
+    "weights": "system_e_beta0.5_weights.pt",
+    "threshold": 0.1,
+    "mrr10": 0.039756025867136974,
+    "mean_batch_latency_ms": 7.0820534133911135,
+    "total_latency_s": 0.7082053413391113,
+    "batch_size": 64,
+    "exit_counts": [
+      48827,
+      9,
+      8,
+      1,
+      2,
+      1
+    ]
+  },
+  {
+    "system": "system_e",
+    "weights": "system_e_beta0.5_weights.pt",
+    "threshold": 0.2,
+    "mrr10": 0.039756025867136974,
+    "mean_batch_latency_ms": 7.088342714309692,
+    "total_latency_s": 0.7088342714309692,
+    "batch_size": 64,
+    "exit_counts": [
+      48848,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "system": "system_e",
+    "weights": "system_e_beta0.5_weights.pt",
+    "threshold": 0.3,
+    "mrr10": 0.039756025867136974,
+    "mean_batch_latency_ms": 7.0779116916656495,
+    "total_latency_s": 0.7077911691665649,
+    "batch_size": 64,
+    "exit_counts": [
+      48848,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "system": "system_e",
+    "weights": "system_e_beta0.5_weights.pt",
+    "threshold": 0.5,
+    "mrr10": 0.039756025867136974,
+    "mean_batch_latency_ms": 7.064732484817505,
+    "total_latency_s": 0.7064732484817505,
+    "batch_size": 64,
+    "exit_counts": [
+      48848,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+]
