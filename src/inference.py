@@ -572,8 +572,12 @@ def run_per_ramp_threshold_sweep(
     rows_written = 0
     flush_every = 25
 
+    # lineterminator="\n" overrides csv.writer's default "\r\n" so the
+    # cluster-written CSVs are byte-identical to the LF-normalized copies
+    # checked into git. Without this, every cluster sweep produces 49 CSVs
+    # that look "modified" in `git status` purely from CRLF vs LF endings.
     with open(csv_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         f.flush()
 
