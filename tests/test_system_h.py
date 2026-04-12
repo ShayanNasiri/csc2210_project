@@ -1,0 +1,194 @@
+"""Tests for System H: patience-based early exit (PABEE).
+
+System H = System G's per-ramp threshold vector + patience parameter P.
+A document exits only when P *consecutive* off-ramps all have entropy below
+their respective threshold. P=1 reproduces System G exactly. Inference-only.
+
+These tests exercise the ``patience`` parameter of
+``EarlyExitCrossEncoder.forward_compacted_early_exit``. The model fixtures
+mirror those in ``tests/test_system_f.py`` (real model on CPU, tiny batch).
+"""
+
+import pytest
+import torch
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def model():
+    pytest.importorskip("transformers")
+    from src.model import EarlyExitCrossEncoder
+    m = EarlyExitCrossEncoder()
+    m.eval()
+    return m
+
+
+@pytest.fixture(scope="module")
+def small_batch(model):
+    """Return a small tokenized batch (batch_size=4) for quick unit tests."""
+    tokenizer = model.tokenizer
+    queries = ["what is python", "best gpu", "neural network", "early exit"]
+    passages = [
+        "Python is a programming language.",
+        "The RTX 4090 is a high-end GPU.",
+        "Neural networks are inspired by the brain.",
+        "Early exit reduces computation.",
+    ]
+    encoded = tokenizer(
+        queries,
+        passages,
+        max_length=32,
+        padding="max_length",
+        truncation=True,
+        return_tensors="pt",
+    )
+    return encoded
+
+
+# ---------------------------------------------------------------------------
+# Patience-based early exit (PABEE) tests
+# ---------------------------------------------------------------------------
+
+class TestPatienceEarlyExit:
+    """forward_compacted_early_exit must accept a ``patience`` int parameter.
+    A document exits only when ``patience`` *consecutive* off-ramps all have
+    entropy below their respective per-ramp threshold. P=1 is the current
+    (System G) behavior. P>1 delays exits, trading latency for quality.
+    """
+
+    def test_patience_1_is_default_behavior(self, model, small_batch):
+        """P=1 must produce identical output to the current (no patience) call.
+        Backward compatibility proof."""
+        with torch.no_grad():
+            out_default = model.forward_compacted_early_exit(
+                small_batch["input_ids"],
+                small_batch["attention_mask"],
+                small_batch["token_type_ids"],
+                entropy_threshold=[0.1, 0.1, 0.1, 0.1, 0.1],
+            )
+            out_p1 = model.forward_compacted_early_exit(
+                small_batch["input_ids"],
+                small_batch["attention_mask"],
+                small_batch["token_type_ids"],
+                entropy_threshold=[0.1, 0.1, 0.1, 0.1, 0.1],
+                patience=1,
+            )
+        assert torch.allclose(out_default["scores"], out_p1["scores"], atol=1e-6)
+        assert torch.equal(out_default["exit_layer"], out_p1["exit_layer"])
+        assert out_default["exit_counts"] == out_p1["exit_counts"]
+
+    def test_patience_2_delays_exit(self, model, small_batch):
+        """With thresholds [1.0, 1.0, 0.0, 0.0, 0.0] every doc has entropy < 1.0
+        at ramps 0 and 1. P=1 exits all at ramp 0; P=2 exits all at ramp 1
+        (first ramp where 2 consecutive below-threshold ramps have been seen)."""
+        batch_size = small_batch["input_ids"].shape[0]
+        thresholds = [1.0, 1.0, 0.0, 0.0, 0.0]
+        with torch.no_grad():
+            out_p1 = model.forward_compacted_early_exit(
+                small_batch["input_ids"],
+                small_batch["attention_mask"],
+                small_batch["token_type_ids"],
+                entropy_threshold=thresholds,
+                patience=1,
+            )
+            out_p2 = model.forward_compacted_early_exit(
+                small_batch["input_ids"],
+                small_batch["attention_mask"],
+                small_batch["token_type_ids"],
+                entropy_threshold=thresholds,
+                patience=2,
+            )
+        # P=1: all exit at ramp 0
+        assert out_p1["exit_counts"][0] == batch_size
+        # P=2: all exit at ramp 1 (ramp 0 = count 1, ramp 1 = count 2 >= 2)
+        assert out_p2["exit_counts"][0] == 0, (
+            f"P=2 should not exit at ramp 0. exit_counts={out_p2['exit_counts']}"
+        )
+        assert out_p2["exit_counts"][1] == batch_size, (
+            f"P=2 should exit all at ramp 1. exit_counts={out_p2['exit_counts']}"
+        )
+
+    def test_patience_3_delays_further(self, model, small_batch):
+        """With thresholds [1.0, 1.0, 1.0, 0.0, 0.0], P=3 exits all at ramp 2
+        (ramps 0, 1, 2 all below threshold = 3 consecutive)."""
+        batch_size = small_batch["input_ids"].shape[0]
+        thresholds = [1.0, 1.0, 1.0, 0.0, 0.0]
+        with torch.no_grad():
+            out = model.forward_compacted_early_exit(
+                small_batch["input_ids"],
+                small_batch["attention_mask"],
+                small_batch["token_type_ids"],
+                entropy_threshold=thresholds,
+                patience=3,
+            )
+        assert out["exit_counts"][0] == 0
+        assert out["exit_counts"][1] == 0
+        assert out["exit_counts"][2] == batch_size, (
+            f"P=3 should exit all at ramp 2. exit_counts={out['exit_counts']}"
+        )
+
+    def test_patience_resets_on_above_threshold(self, model, small_batch):
+        """With thresholds [1.0, 0.0, 1.0, 1.0, 0.0] and P=2:
+        ramp 0 below (count=1), ramp 1 above (count resets to 0),
+        ramp 2 below (count=1), ramp 3 below (count=2 -> exit at ramp 3)."""
+        batch_size = small_batch["input_ids"].shape[0]
+        thresholds = [1.0, 0.0, 1.0, 1.0, 0.0]
+        with torch.no_grad():
+            out = model.forward_compacted_early_exit(
+                small_batch["input_ids"],
+                small_batch["attention_mask"],
+                small_batch["token_type_ids"],
+                entropy_threshold=thresholds,
+                patience=2,
+            )
+        assert out["exit_counts"][0] == 0
+        assert out["exit_counts"][1] == 0
+        assert out["exit_counts"][2] == 0
+        assert out["exit_counts"][3] == batch_size, (
+            f"P=2 with reset should exit all at ramp 3. exit_counts={out['exit_counts']}"
+        )
+
+    def test_patience_exceeds_ramps_goes_to_final(self, model, small_batch):
+        """P=6 is impossible to satisfy with only 5 off-ramps -- all docs must
+        reach the final layer (exit_layer=5) regardless of thresholds."""
+        batch_size = small_batch["input_ids"].shape[0]
+        thresholds = [1.0, 1.0, 1.0, 1.0, 1.0]
+        with torch.no_grad():
+            out = model.forward_compacted_early_exit(
+                small_batch["input_ids"],
+                small_batch["attention_mask"],
+                small_batch["token_type_ids"],
+                entropy_threshold=thresholds,
+                patience=6,
+            )
+        for i in range(5):
+            assert out["exit_counts"][i] == 0, (
+                f"P=6 should not exit at ramp {i}. exit_counts={out['exit_counts']}"
+            )
+        assert out["exit_counts"][5] == batch_size, (
+            f"P=6 should send all to final. exit_counts={out['exit_counts']}"
+        )
+
+    def test_patience_invalid_values(self, model, small_batch):
+        """P=0, P=-1, P=1.5, P='2' must raise ValueError or TypeError."""
+        for bad_val in (0, -1):
+            with pytest.raises(ValueError):
+                model.forward_compacted_early_exit(
+                    small_batch["input_ids"],
+                    small_batch["attention_mask"],
+                    small_batch["token_type_ids"],
+                    entropy_threshold=0.1,
+                    patience=bad_val,
+                )
+        for bad_type in (1.5, "2", True):
+            with pytest.raises(TypeError):
+                model.forward_compacted_early_exit(
+                    small_batch["input_ids"],
+                    small_batch["attention_mask"],
+                    small_batch["token_type_ids"],
+                    entropy_threshold=0.1,
+                    patience=bad_type,
+                )

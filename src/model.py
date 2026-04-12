@@ -126,6 +126,7 @@ class EarlyExitCrossEncoder(nn.Module):
         attention_mask,
         token_type_ids=None,
         entropy_threshold: Union[float, Sequence[float]] = 0.1,
+        patience: int = 1,
     ):
         """System C early-exit inference. Exited docs are physically removed from
         the batch via Triton compaction, eliminating wasted compute on padding.
@@ -136,11 +137,25 @@ class EarlyExitCrossEncoder(nn.Module):
         any other length raise ``ValueError``; non-numeric, non-sequence inputs
         raise ``TypeError``.
 
+        ``patience`` (System H / PABEE): a document exits only when
+        ``patience`` *consecutive* off-ramps all have entropy below their
+        respective threshold. P=1 reproduces the default single-check behavior.
+
         Returns dict with:
             scores:      (batch,) final relevance score for each doc
             exit_layer:  (batch,) int tensor, 0-4 = off-ramp index, 5 = full forward
             exit_counts: list of 6 ints — docs exiting at each point
         """
+        # Validate patience parameter.
+        if isinstance(patience, bool) or not isinstance(patience, int):
+            raise TypeError(
+                f"patience must be int, got {type(patience).__name__}"
+            )
+        if patience < 1:
+            raise ValueError(
+                f"patience must be >= 1, got {patience}"
+            )
+
         # Normalize entropy_threshold to a length-NUM_OFFRAMPS list of floats.
         # bool is excluded because bool is an int subclass and accepting it
         # would silently coerce True/False into 1.0/0.0 — almost certainly a bug.
@@ -178,13 +193,20 @@ class EarlyExitCrossEncoder(nn.Module):
         exit_layer = torch.zeros(batch_size, dtype=torch.long, device=device)
         exit_counts = [0] * (NUM_OFFRAMPS + 1)
 
+        # Patience counter: tracks consecutive below-threshold ramps per doc.
+        # Lives in original-batch-index space so it persists across compaction.
+        consec_below = torch.zeros(batch_size, dtype=torch.long, device=device)
+
         for i in range(NUM_BERT_LAYERS):
             hidden_states = self._apply_bert_layer(i, hidden_states, extended_mask)
 
             if i < NUM_OFFRAMPS:
                 logit = self.offramps(i, hidden_states)
                 entropy = self.offramps.ramps[i].compute_entropy(logit)
-                exited = entropy < thresholds[i]
+                below = entropy < thresholds[i]
+                consec_below[global_indices[below]] += 1
+                consec_below[global_indices[~below]] = 0
+                exited = consec_below[global_indices] >= patience
 
                 if exited.any():
                     # Record scores and exit info for exited items
