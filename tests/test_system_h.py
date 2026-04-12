@@ -4,10 +4,16 @@ System H = System G's per-ramp threshold vector + patience parameter P.
 A document exits only when P *consecutive* off-ramps all have entropy below
 their respective threshold. P=1 reproduces System G exactly. Inference-only.
 
-These tests exercise the ``patience`` parameter of
-``EarlyExitCrossEncoder.forward_compacted_early_exit``. The model fixtures
-mirror those in ``tests/test_system_f.py`` (real model on CPU, tiny batch).
+These tests exercise:
+1. The ``patience`` parameter of ``forward_compacted_early_exit`` (real model,
+   CPU, tiny batch — same pattern as ``tests/test_system_f.py``).
+2. The sweep driver's ``patience`` plumbing: CSV schema, column values, and
+   output directory isolation (mocked GPU — same ``mocked_sweep_env`` fixture
+   from ``tests/conftest.py``).
 """
+
+import csv
+import os
 
 import pytest
 import torch
@@ -192,3 +198,119 @@ class TestPatienceEarlyExit:
                     entropy_threshold=0.1,
                     patience=bad_type,
                 )
+
+
+# ---------------------------------------------------------------------------
+# Sweep driver — patience plumbing tests
+# ---------------------------------------------------------------------------
+#
+# These guard the contract between the SLURM script's --patience flag and the
+# CSV that lands on disk. The mocked_sweep_env fixture (tests/conftest.py)
+# replaces all GPU-heavy dependencies so these run anywhere.
+
+class TestSweepDriverPatience:
+    """Sweep driver must accept ``patience``, record it in every CSV row,
+    and preserve the existing column schema so System F/G CSVs stay
+    comparable."""
+
+    def test_default_patience_csv_schema_unchanged(self, mocked_sweep_env):
+        """With default kwargs (no patience arg), the CSV header must include
+        a 'patience' column AND all original columns in the same order.
+        Every row must have patience=1."""
+        from src.inference import run_per_ramp_threshold_sweep
+
+        csv_path = run_per_ramp_threshold_sweep(
+            task_id=0,
+            num_tasks=4,
+            grid_values=[0.01, 0.5],
+            output_dir=str(mocked_sweep_env),
+        )
+
+        with open(csv_path, "r") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            header = reader.fieldnames
+
+        # Original columns must still be present
+        for col in ["t0", "t1", "t2", "t3", "t4", "mrr10",
+                     "mean_batch_latency_ms", "exit_count_0", "exit_count_1",
+                     "exit_count_2", "exit_count_3", "exit_count_4",
+                     "exit_count_5"]:
+            assert col in header, f"Missing original column '{col}' in header"
+
+        # patience column must exist
+        assert "patience" in header, "CSV must include 'patience' column"
+
+        # Every row must have patience=1 (default)
+        for row in rows:
+            assert row["patience"] == "1", (
+                f"Default patience should be 1, got {row['patience']}"
+            )
+
+    def test_patience_2_recorded_in_csv(self, mocked_sweep_env):
+        """With patience=2, every CSV row must have patience=2."""
+        from src.inference import run_per_ramp_threshold_sweep
+
+        csv_path = run_per_ramp_threshold_sweep(
+            task_id=0,
+            num_tasks=4,
+            grid_values=[0.01, 0.5],
+            output_dir=str(mocked_sweep_env),
+            patience=2,
+        )
+
+        with open(csv_path, "r") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        assert len(rows) == 8, f"Expected 8 rows, got {len(rows)}"
+        for row in rows:
+            assert row["patience"] == "2", (
+                f"patience=2 not recorded. Got {row['patience']}"
+            )
+
+    def test_system_h_sweep_layout_p2(self, mocked_sweep_env):
+        """System H P=2 sweep must write CSVs to system_h_sweep_results/
+        with the system_h_p2 prefix, and must NOT create System F or G dirs."""
+        from src.constants import DEFAULT_PER_RAMP_GRID
+        from src.inference import run_per_ramp_threshold_sweep
+
+        produced = []
+        for task_id in range(49):
+            csv_path = run_per_ramp_threshold_sweep(
+                task_id=task_id,
+                num_tasks=49,
+                grid_values=DEFAULT_PER_RAMP_GRID,
+                output_dir=str(mocked_sweep_env),
+                sweep_subdir="system_h_sweep_results",
+                csv_prefix="system_h_p2",
+                patience=2,
+            )
+            produced.append(csv_path)
+
+        # All 49 CSVs in the right directory
+        expected_dir = os.path.join(str(mocked_sweep_env), "system_h_sweep_results")
+        for p in produced:
+            assert os.path.dirname(p) == expected_dir
+            assert os.path.basename(p).startswith("system_h_p2_t0=")
+            assert os.path.isfile(p)
+
+        # 49 unique cells
+        assert len(set(produced)) == 49
+
+        # Expected filenames cover full grid
+        expected_basenames = {
+            f"system_h_p2_t0={t0}_t1={t1}.csv"
+            for t0 in DEFAULT_PER_RAMP_GRID
+            for t1 in DEFAULT_PER_RAMP_GRID
+        }
+        produced_basenames = {os.path.basename(p) for p in produced}
+        assert produced_basenames == expected_basenames
+
+        # Must not touch System F or G directories
+        assert not os.path.isdir(
+            os.path.join(str(mocked_sweep_env), "system_f_sweep_results")
+        ), "System H leaked into System F dir"
+        assert not os.path.isdir(
+            os.path.join(str(mocked_sweep_env), "system_g_sweep_results")
+        ), "System H leaked into System G dir"

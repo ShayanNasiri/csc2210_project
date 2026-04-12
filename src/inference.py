@@ -476,6 +476,7 @@ def run_per_ramp_threshold_sweep(
     output_dir: str = DEFAULT_RESULTS_DIR,
     sweep_subdir: str = "system_f_sweep_results",
     csv_prefix: str = "system_f",
+    patience: int = 1,
 ) -> str:
     """Per-ramp entropy threshold grid sweep over a given weights file.
 
@@ -546,6 +547,7 @@ def run_per_ramp_threshold_sweep(
 
     fieldnames = [
         "t0", "t1", "t2", "t3", "t4",
+        "patience",
         "mrr10", "mean_batch_latency_ms",
         "exit_count_0", "exit_count_1", "exit_count_2",
         "exit_count_3", "exit_count_4", "exit_count_5",
@@ -556,7 +558,8 @@ def run_per_ramp_threshold_sweep(
 
     def warmup_fn(input_ids, attention_mask, token_type_ids, _t=warmup_thresholds):
         return model.forward_compacted_early_exit(
-            input_ids, attention_mask, token_type_ids, entropy_threshold=_t
+            input_ids, attention_mask, token_type_ids, entropy_threshold=_t,
+            patience=patience,
         )
 
     with torch.no_grad():
@@ -588,7 +591,8 @@ def run_per_ramp_threshold_sweep(
                 input_ids, attention_mask, token_type_ids, _t=thresholds_vec
             ):
                 return model.forward_compacted_early_exit(
-                    input_ids, attention_mask, token_type_ids, entropy_threshold=_t
+                    input_ids, attention_mask, token_type_ids, entropy_threshold=_t,
+                    patience=patience,
                 )
 
             with torch.no_grad():
@@ -608,6 +612,7 @@ def run_per_ramp_threshold_sweep(
 
             row = {
                 "t0": t0, "t1": t1, "t2": t2, "t3": t3, "t4": t4,
+                "patience": patience,
                 "mrr10": mrr10,
                 "mean_batch_latency_ms": mean_lat,
                 "exit_count_0": global_exit_counts[0],
@@ -802,6 +807,8 @@ if __name__ == "__main__":
                         help="Subdirectory under --output_dir for per_ramp_sweep CSVs")
     parser.add_argument("--csv_prefix", type=str, default="system_f",
                         help="Filename prefix for per_ramp_sweep CSVs (before _t0=...)")
+    parser.add_argument("--patience", type=int, default=1,
+                        help="PABEE patience P: exit after P consecutive below-threshold ramps")
     args = parser.parse_args()
 
     if args.system == "baseline_a":
@@ -860,4 +867,5 @@ if __name__ == "__main__":
             output_dir=args.output_dir,
             sweep_subdir=args.sweep_subdir,
             csv_prefix=args.csv_prefix,
+            patience=args.patience,
         )

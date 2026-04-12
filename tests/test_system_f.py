@@ -216,6 +216,7 @@ class TestRunPerRampThresholdSweep:
 
         expected_header = [
             "t0", "t1", "t2", "t3", "t4",
+            "patience",
             "mrr10", "mean_batch_latency_ms",
             "exit_count_0", "exit_count_1", "exit_count_2",
             "exit_count_3", "exit_count_4", "exit_count_5",
