@@ -4,7 +4,7 @@
 #SBATCH --exclude=gpunode7,gpunode13,gpunode33
 #SBATCH -c 4
 #SBATCH --mem=16G
-#SBATCH -t 2:00:00
+#SBATCH -t 2:15:00
 #SBATCH --array=0-195
 #SBATCH --job-name=system_h_sweep
 #SBATCH --output=results/system_h_sweep_%A_%a.log
