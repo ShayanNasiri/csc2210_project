@@ -17,6 +17,7 @@ from src.constants import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_ENTROPY_THRESHOLDS,
     DEFAULT_JOINT_WEIGHTS_PATH,
+    DEFAULT_OFFRAMP_WEIGHTS_PATH,
     DEFAULT_SYSTEM_E_WEIGHTS_PATH,
     DEFAULT_PER_RAMP_GRID,
     WARMUP_BATCHES,
@@ -107,6 +108,7 @@ def run_baseline_b(
     thresholds: list | None = None,
     output_dir: str = DEFAULT_RESULTS_DIR,
     results_tag: str = "",
+    weights_path: str | None = None,
 ) -> list:
     """Run naive early-exit inference (Baseline B) over a list of entropy thresholds.
 
@@ -114,13 +116,14 @@ def run_baseline_b(
     """
     if thresholds is None:
         thresholds = DEFAULT_ENTROPY_THRESHOLDS
+    if weights_path is None:
+        weights_path = DEFAULT_OFFRAMP_WEIGHTS_PATH
 
     set_seed()
     device = get_device()
 
     # Load model + off-ramp weights
     model = EarlyExitCrossEncoder()
-    weights_path = os.path.join(output_dir, "offramp_weights.pt")
     model.offramps.load_state_dict(
         torch.load(weights_path, map_location=device, weights_only=True)
     )
@@ -197,6 +200,7 @@ def run_system_c(
     thresholds: list | None = None,
     output_dir: str = DEFAULT_RESULTS_DIR,
     results_tag: str = "",
+    weights_path: str | None = None,
 ) -> list:
     """Run Triton-compacted early-exit inference (System C) over a list of entropy thresholds.
 
@@ -204,13 +208,14 @@ def run_system_c(
     """
     if thresholds is None:
         thresholds = DEFAULT_ENTROPY_THRESHOLDS
+    if weights_path is None:
+        weights_path = DEFAULT_OFFRAMP_WEIGHTS_PATH
 
     set_seed()
     device = get_device()
 
     # Load model + off-ramp weights
     model = EarlyExitCrossEncoder()
-    weights_path = os.path.join(output_dir, "offramp_weights.pt")
     model.offramps.load_state_dict(
         torch.load(weights_path, map_location=device, weights_only=True)
     )
@@ -887,7 +892,7 @@ def run_full_sweep(
                 model.eval()
             else:
                 model = EarlyExitCrossEncoder()
-                weights_path = os.path.join(output_dir, "offramp_weights.pt")
+                weights_path = DEFAULT_OFFRAMP_WEIGHTS_PATH
                 model.offramps.load_state_dict(
                     torch.load(weights_path, map_location=device, weights_only=True)
                 )
@@ -1023,6 +1028,7 @@ if __name__ == "__main__":
             tokenized_path=args.data_path,
             batch_size=args.batch_size,
             output_dir=args.output_dir,
+            weights_path=args.weights_path,
             results_tag=args.results_tag,
         )
     elif args.system == "system_c":
@@ -1030,6 +1036,7 @@ if __name__ == "__main__":
             tokenized_path=args.data_path,
             batch_size=args.batch_size,
             output_dir=args.output_dir,
+            weights_path=args.weights_path,
             results_tag=args.results_tag,
         )
     elif args.system == "system_d":
