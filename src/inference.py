@@ -639,6 +639,203 @@ def run_per_ramp_threshold_sweep(
     return csv_path
 
 
+def _run_per_ramp_single_point(
+    system_name: str,
+    weights_path: str,
+    thresholds,
+    patience: int = 1,
+    tokenized_path: str = DEFAULT_DEV_DATA_PATH,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    output_dir: str = DEFAULT_RESULTS_DIR,
+    results_tag: str = "",
+) -> dict:
+    """Shared backend for the System F / G / H single-operating-point runners.
+
+    Evaluates ONE configuration (a length-5 per-ramp threshold vector plus a
+    patience value) and writes ``{results_tag}{system_name}_results.json``.
+    The JSON is a one-element list to match the Baseline A / System D / E
+    schema (those schemas are lists-over-thresholds; a single operating point
+    is simply a list of length 1).
+    """
+    if not hasattr(thresholds, "__len__") or len(thresholds) != 5:
+        raise ValueError(
+            f"thresholds must have length 5 (one per ramp), got "
+            f"{getattr(thresholds, '__len__', lambda: '?')()}"
+        )
+    if patience < 1:
+        raise ValueError(f"patience must be >= 1, got {patience}")
+
+    thresholds = [float(t) for t in thresholds]
+
+    set_seed()
+    device = get_device()
+
+    model = EarlyExitCrossEncoder()
+    state = torch.load(weights_path, map_location=device, weights_only=True)
+    model.backbone.load_state_dict(state["backbone"])
+    model.offramps.load_state_dict(state["offramps"])
+    model.to(device)
+    model.eval()
+
+    data = load_tokenized_data(tokenized_path)
+    num_samples = data["input_ids"].shape[0]
+
+    runner = BatchRunner(
+        num_samples=num_samples,
+        batch_size=batch_size,
+        warmup_batches=WARMUP_BATCHES,
+        timed_batch_limit=TIMED_BATCH_LIMIT,
+    )
+
+    def forward_fn(input_ids, attention_mask, token_type_ids,
+                   _t=list(thresholds), _p=patience):
+        return model.forward_compacted_early_exit(
+            input_ids, attention_mask, token_type_ids,
+            entropy_threshold=_t, patience=_p,
+        )
+
+    with torch.no_grad():
+        runner.warmup(data, device, forward_fn)
+        all_outputs, batch_latencies = runner.run_with_timing(data, device, forward_fn)
+
+    all_scores = []
+    global_exit_counts = [0] * (NUM_OFFRAMPS + 1)
+    for out in all_outputs:
+        all_scores.extend(out["scores"].cpu().tolist())
+        for j in range(NUM_OFFRAMPS + 1):
+            global_exit_counts[j] += out["exit_counts"][j]
+
+    total_ms = sum(batch_latencies)
+    mean_ms = total_ms / len(batch_latencies)
+    mrr10 = compute_mrr_at_k(data["qids"], all_scores, data["labels"], k=10)
+
+    result = {
+        "system": system_name,
+        "weights": os.path.basename(weights_path),
+        "thresholds": list(thresholds),
+        "patience": patience,
+        "mrr10": mrr10,
+        "mean_batch_latency_ms": mean_ms,
+        "total_latency_s": total_ms / 1000.0,
+        "batch_size": batch_size,
+        "exit_counts": global_exit_counts,
+    }
+
+    print(
+        f"{system_name} thresholds={thresholds} patience={patience} — "
+        f"MRR@10: {mrr10:.4f}, Latency: {mean_ms:.2f} ms, "
+        f"Exit counts: {global_exit_counts}"
+    )
+
+    os.makedirs(output_dir, exist_ok=True)
+    save_results(
+        [result],
+        os.path.join(output_dir, f"{results_tag}{system_name}_results.json"),
+    )
+    return result
+
+
+def run_system_f(
+    tokenized_path: str = DEFAULT_DEV_DATA_PATH,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    thresholds=None,
+    output_dir: str = DEFAULT_RESULTS_DIR,
+    weights_path: str | None = None,
+    results_tag: str = "",
+) -> dict:
+    """System F: System D α=0.5 weights + per-ramp entropy threshold vector.
+
+    Inference-only single-operating-point variant. Caller must supply a
+    length-5 ``thresholds`` list; patience is fixed at 1 (System F is PABEE
+    patience=1 by definition).
+    """
+    if weights_path is None:
+        weights_path = os.path.join(output_dir, "joint_alpha0.5_weights.pt")
+    return _run_per_ramp_single_point(
+        system_name="system_f",
+        weights_path=weights_path,
+        thresholds=thresholds if thresholds is not None else [],
+        patience=1,
+        tokenized_path=tokenized_path,
+        batch_size=batch_size,
+        output_dir=output_dir,
+        results_tag=results_tag,
+    )
+
+
+def run_system_g(
+    tokenized_path: str = DEFAULT_DEV_DATA_PATH,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    thresholds=None,
+    output_dir: str = DEFAULT_RESULTS_DIR,
+    weights_path: str | None = None,
+    results_tag: str = "",
+) -> dict:
+    """System G: System E β=1.0 weights + per-ramp entropy threshold vector.
+
+    Inference-only single-operating-point variant. Patience is fixed at 1.
+    """
+    if weights_path is None:
+        weights_path = os.path.join(output_dir, "system_e_beta1.0_weights.pt")
+    return _run_per_ramp_single_point(
+        system_name="system_g",
+        weights_path=weights_path,
+        thresholds=thresholds if thresholds is not None else [],
+        patience=1,
+        tokenized_path=tokenized_path,
+        batch_size=batch_size,
+        output_dir=output_dir,
+        results_tag=results_tag,
+    )
+
+
+def run_system_h(
+    tokenized_path: str = DEFAULT_DEV_DATA_PATH,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    thresholds=None,
+    patience: int = 2,
+    output_dir: str = DEFAULT_RESULTS_DIR,
+    weights_path: str | None = None,
+    results_tag: str = "",
+) -> dict:
+    """System H: System E β=1.0 weights + per-ramp thresholds + PABEE patience ≥ 2.
+
+    Inference-only. ``patience`` must be ≥ 2 — P=1 is System G, not System H.
+    """
+    if patience < 2:
+        raise ValueError(
+            f"System H requires patience >= 2 (P=1 is System G, not System H); "
+            f"got patience={patience}"
+        )
+    if weights_path is None:
+        weights_path = os.path.join(output_dir, "system_e_beta1.0_weights.pt")
+    return _run_per_ramp_single_point(
+        system_name="system_h",
+        weights_path=weights_path,
+        thresholds=thresholds if thresholds is not None else [],
+        patience=patience,
+        tokenized_path=tokenized_path,
+        batch_size=batch_size,
+        output_dir=output_dir,
+        results_tag=results_tag,
+    )
+
+
+def _parse_thresholds_arg(s: str) -> list:
+    """Parse a ``--thresholds`` CLI string ``"t0,t1,t2,t3,t4"`` into a list of 5 floats."""
+    parts = [p.strip() for p in s.split(",") if p.strip()]
+    if len(parts) != 5:
+        raise argparse.ArgumentTypeError(
+            f"--thresholds must be 5 comma-separated floats, got {len(parts)}: {s!r}"
+        )
+    try:
+        return [float(p) for p in parts]
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(
+            f"--thresholds must be 5 comma-separated floats: {e}"
+        )
+
+
 DEFAULT_SWEEP_SYSTEMS = ["baseline_a", "baseline_b", "system_c"]
 DEFAULT_SWEEP_BATCH_SIZES = [32, 64, 128, 256, 512]
 
@@ -809,6 +1006,9 @@ if __name__ == "__main__":
                         help="Filename prefix for per_ramp_sweep CSVs (before _t0=...)")
     parser.add_argument("--patience", type=int, default=1,
                         help="PABEE patience P: exit after P consecutive below-threshold ramps")
+    parser.add_argument("--thresholds", type=_parse_thresholds_arg, default=None,
+                        help="5 comma-separated floats (per-ramp thresholds) "
+                             "for system_f/system_g/system_h single-point runs")
     args = parser.parse_args()
 
     if args.system == "baseline_a":
@@ -844,6 +1044,34 @@ if __name__ == "__main__":
         run_system_e(
             tokenized_path=args.data_path,
             batch_size=args.batch_size,
+            output_dir=args.output_dir,
+            weights_path=args.weights_path,
+            results_tag=args.results_tag,
+        )
+    elif args.system == "system_f":
+        run_system_f(
+            tokenized_path=args.data_path,
+            batch_size=args.batch_size,
+            thresholds=args.thresholds,
+            output_dir=args.output_dir,
+            weights_path=args.weights_path,
+            results_tag=args.results_tag,
+        )
+    elif args.system == "system_g":
+        run_system_g(
+            tokenized_path=args.data_path,
+            batch_size=args.batch_size,
+            thresholds=args.thresholds,
+            output_dir=args.output_dir,
+            weights_path=args.weights_path,
+            results_tag=args.results_tag,
+        )
+    elif args.system == "system_h":
+        run_system_h(
+            tokenized_path=args.data_path,
+            batch_size=args.batch_size,
+            thresholds=args.thresholds,
+            patience=args.patience,
             output_dir=args.output_dir,
             weights_path=args.weights_path,
             results_tag=args.results_tag,

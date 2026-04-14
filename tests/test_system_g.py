@@ -20,6 +20,8 @@ The shared ``mocked_sweep_env`` fixture is defined in ``tests/conftest.py``.
 
 import os
 
+import pytest
+
 
 class TestSystemGSweepLayout:
     """End-to-end output-layout assertions for the System G sweep."""
@@ -73,3 +75,55 @@ class TestSystemGSweepLayout:
         assert not os.path.isdir(
             os.path.join(str(mocked_sweep_env), "system_f_sweep_results")
         ), "System G run leaked into the System F subdir — collision risk"
+
+
+# ---------------------------------------------------------------------------
+# run_system_g — single-operating-point runner tests
+# ---------------------------------------------------------------------------
+
+class TestRunSystemG:
+    def test_importable(self):
+        from src.inference import run_system_g  # noqa: F401
+
+    def test_signature(self):
+        import inspect
+        from src.inference import run_system_g
+        sig = inspect.signature(run_system_g)
+        for name in ("tokenized_path", "batch_size", "thresholds",
+                     "output_dir", "weights_path", "results_tag"):
+            assert name in sig.parameters, f"missing param {name}"
+
+    def test_wrong_length_thresholds_raises(self, mocked_sweep_env):
+        from src.inference import run_system_g
+        with pytest.raises(ValueError, match="length 5"):
+            run_system_g(
+                thresholds=[0.1, 0.1, 0.1],
+                output_dir=str(mocked_sweep_env),
+                weights_path="irrelevant.pt",
+            )
+
+    def test_writes_json_with_system_g_label(self, mocked_sweep_env):
+        import json
+        from src.inference import run_system_g
+        result = run_system_g(
+            thresholds=[0.001, 0.01, 0.1, 0.5, 0.003],
+            output_dir=str(mocked_sweep_env),
+            weights_path="irrelevant.pt",
+            results_tag="test_final_",
+        )
+        assert result["system"] == "system_g"
+        assert result["patience"] == 1
+        json_path = os.path.join(str(mocked_sweep_env), "test_final_system_g_results.json")
+        assert os.path.isfile(json_path)
+        with open(json_path) as f:
+            on_disk = json.load(f)
+        assert on_disk[0]["system"] == "system_g"
+
+    def test_cli_dispatch_routes_to_run_system_g(self):
+        import inspect
+        import src.inference as inf
+        src = inspect.getsource(inf)
+        branch = src.split('elif args.system == "system_g":')[1].split("elif args.system ==")[0]
+        assert "run_system_g(" in branch
+        assert "thresholds=" in branch
+        assert "weights_path=args.weights_path" in branch

@@ -240,3 +240,29 @@ class TestSystemDWeightLoading:
         # Find the system_d branch and verify weights_path is passed
         system_d_branch = cli_source.split('elif args.system == "system_d":')[1].split("elif args.system ==")[0]
         assert "weights_path=args.weights_path" in system_d_branch
+
+
+# ---- --thresholds CLI parsing (for System F/G/H single-point runs) ----
+
+class TestThresholdsArgParsing:
+    """--thresholds "t0,t1,t2,t3,t4" must parse into a length-5 list of floats."""
+
+    def test_parse_thresholds_importable(self):
+        from src.inference import _parse_thresholds_arg  # noqa: F401
+
+    def test_parse_thresholds_returns_list_of_floats(self):
+        from src.inference import _parse_thresholds_arg
+        out = _parse_thresholds_arg("0.001,0.01,0.3,0.5,0.5")
+        assert out == [0.001, 0.01, 0.3, 0.5, 0.5]
+        assert all(isinstance(x, float) for x in out)
+
+    def test_parse_thresholds_rejects_wrong_length(self):
+        from src.inference import _parse_thresholds_arg
+        for bad in ("0.1,0.1,0.1,0.1", "0.1,0.1,0.1,0.1,0.1,0.1", ""):
+            with pytest.raises(Exception):
+                _parse_thresholds_arg(bad)
+
+    def test_parse_thresholds_rejects_non_float_tokens(self):
+        from src.inference import _parse_thresholds_arg
+        with pytest.raises(Exception):
+            _parse_thresholds_arg("0.1,abc,0.1,0.1,0.1")

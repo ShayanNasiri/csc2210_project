@@ -336,3 +336,68 @@ class TestRunPerRampThresholdSweep:
         # Subdir defaults to system_f_sweep_results when only csv_prefix is overridden
         assert os.path.basename(os.path.dirname(csv_path)) == "system_f_sweep_results"
         assert os.path.isfile(csv_path)
+
+
+# ---------------------------------------------------------------------------
+# run_system_f — single-operating-point runner tests
+# ---------------------------------------------------------------------------
+#
+# System F at the winning per-ramp threshold vector is a LEGITIMATE named
+# operating point for the final eval, not a sweep cell. The single-point
+# runner below evaluates one (thresholds, patience=1, weights) configuration
+# and writes a scalar result JSON matching the Baseline A / System D schema.
+
+class TestRunSystemF:
+    def test_importable(self):
+        from src.inference import run_system_f  # noqa: F401
+
+    def test_signature(self):
+        import inspect
+        from src.inference import run_system_f
+        sig = inspect.signature(run_system_f)
+        for name in ("tokenized_path", "batch_size", "thresholds",
+                     "output_dir", "weights_path", "results_tag"):
+            assert name in sig.parameters, f"missing param {name}"
+
+    def test_wrong_length_thresholds_raises(self, mocked_sweep_env):
+        from src.inference import run_system_f
+        for bad in ([0.1] * 4, [0.1] * 6, []):
+            with pytest.raises(ValueError, match="length 5"):
+                run_system_f(
+                    thresholds=bad,
+                    output_dir=str(mocked_sweep_env),
+                    weights_path="irrelevant.pt",
+                )
+
+    def test_writes_json_with_expected_schema(self, mocked_sweep_env):
+        import json
+        from src.inference import run_system_f
+        result = run_system_f(
+            thresholds=[0.001, 0.01, 0.3, 0.5, 0.5],
+            output_dir=str(mocked_sweep_env),
+            weights_path="irrelevant.pt",
+            results_tag="test_final_",
+        )
+        assert isinstance(result, dict)
+        assert result["system"] == "system_f"
+        assert result["thresholds"] == [0.001, 0.01, 0.3, 0.5, 0.5]
+        assert result["patience"] == 1
+        assert "mrr10" in result and "mean_batch_latency_ms" in result
+        assert "exit_counts" in result
+
+        json_path = os.path.join(str(mocked_sweep_env), "test_final_system_f_results.json")
+        assert os.path.isfile(json_path), f"expected JSON at {json_path}"
+        with open(json_path) as f:
+            on_disk = json.load(f)
+        # Match System D/E convention: JSON contains a list of result dicts
+        assert isinstance(on_disk, list) and len(on_disk) == 1
+        assert on_disk[0]["system"] == "system_f"
+
+    def test_cli_dispatch_routes_to_run_system_f(self):
+        import inspect
+        import src.inference as inf
+        src = inspect.getsource(inf)
+        branch = src.split('elif args.system == "system_f":')[1].split("elif args.system ==")[0]
+        assert "run_system_f(" in branch
+        assert "thresholds=args.thresholds" in branch or "thresholds=" in branch
+        assert "weights_path=args.weights_path" in branch

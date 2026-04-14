@@ -314,3 +314,71 @@ class TestSweepDriverPatience:
         assert not os.path.isdir(
             os.path.join(str(mocked_sweep_env), "system_g_sweep_results")
         ), "System H leaked into System G dir"
+
+
+# ---------------------------------------------------------------------------
+# run_system_h — single-operating-point runner tests
+# ---------------------------------------------------------------------------
+
+class TestRunSystemH:
+    def test_importable(self):
+        from src.inference import run_system_h  # noqa: F401
+
+    def test_signature(self):
+        import inspect
+        from src.inference import run_system_h
+        sig = inspect.signature(run_system_h)
+        for name in ("tokenized_path", "batch_size", "thresholds",
+                     "patience", "output_dir", "weights_path", "results_tag"):
+            assert name in sig.parameters, f"missing param {name}"
+
+    def test_wrong_length_thresholds_raises(self, mocked_sweep_env):
+        from src.inference import run_system_h
+        with pytest.raises(ValueError, match="length 5"):
+            run_system_h(
+                thresholds=[0.1, 0.1, 0.1, 0.1],
+                patience=2,
+                output_dir=str(mocked_sweep_env),
+                weights_path="irrelevant.pt",
+            )
+
+    def test_patience_below_2_raises(self, mocked_sweep_env):
+        """System H is PABEE; patience must be >=2. P=1 should route through
+        System G instead. Guard prevents silently running a mislabeled config."""
+        from src.inference import run_system_h
+        with pytest.raises(ValueError, match="patience"):
+            run_system_h(
+                thresholds=[0.1, 0.1, 0.1, 0.1, 0.1],
+                patience=1,
+                output_dir=str(mocked_sweep_env),
+                weights_path="irrelevant.pt",
+            )
+
+    def test_writes_json_with_system_h_label_and_patience(self, mocked_sweep_env):
+        import json
+        from src.inference import run_system_h
+        result = run_system_h(
+            thresholds=[0.03, 0.1, 0.1, 0.003, 0.001],
+            patience=2,
+            output_dir=str(mocked_sweep_env),
+            weights_path="irrelevant.pt",
+            results_tag="test_final_",
+        )
+        assert result["system"] == "system_h"
+        assert result["patience"] == 2
+        assert result["thresholds"] == [0.03, 0.1, 0.1, 0.003, 0.001]
+        json_path = os.path.join(str(mocked_sweep_env), "test_final_system_h_results.json")
+        assert os.path.isfile(json_path)
+        with open(json_path) as f:
+            on_disk = json.load(f)
+        assert on_disk[0]["patience"] == 2
+
+    def test_cli_dispatch_routes_to_run_system_h(self):
+        import inspect
+        import src.inference as inf
+        src = inspect.getsource(inf)
+        branch = src.split('elif args.system == "system_h":')[1].split("elif args.system ==")[0]
+        assert "run_system_h(" in branch
+        assert "thresholds=" in branch
+        assert "patience=args.patience" in branch
+        assert "weights_path=args.weights_path" in branch
