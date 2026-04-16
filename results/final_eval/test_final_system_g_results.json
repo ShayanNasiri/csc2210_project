@@ -1,0 +1,26 @@
+[
+  {
+    "system": "system_g",
+    "weights": "system_e_beta1.0_weights.pt",
+    "thresholds": [
+      0.001,
+      0.01,
+      0.1,
+      0.5,
+      0.003
+    ],
+    "patience": 1,
+    "mrr10": 0.5320185825226148,
+    "mean_batch_latency_ms": 18.153490867614746,
+    "total_latency_s": 1.8153490867614746,
+    "batch_size": 64,
+    "exit_counts": [
+      1472,
+      41107,
+      14193,
+      4750,
+      0,
+      835
+    ]
+  }
+]
