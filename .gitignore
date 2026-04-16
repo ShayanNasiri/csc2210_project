@@ -7,10 +7,10 @@ __pycache__/
 data/*.parquet
 data/*.pt
 
-# Results: CSVs / JSONs / logs are kept in-repo for reviewer audit.
-# Weights (.pt, regenerable from training scripts) are excluded — too
-# large for git. Plots (.png / .jpg / .pdf / .svg) are also excluded
-# until the final review pass — they will be added later.
+# Results: CSVs and JSONs are kept in-repo for reviewer audit.
+# Logs, weights (.pt, regenerable from training scripts), and plots
+# are excluded — large and/or not needed for reproducibility.
+results/**/*.log
 results/**/*.pt
 results/**/*.png
 results/**/*.jpg

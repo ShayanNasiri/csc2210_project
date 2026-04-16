@@ -1,27 +1,0 @@
-GPU ready: NVIDIA GeForce RTX 4090
-==========================================
-System F per-ramp sweep — array task 9 / 48
-==========================================
-Loading weights:   0%|          | 0/105 [00:00<?, ?it/s]Loading weights: 100%|██████████| 105/105 [00:00<00:00, 8436.98it/s]
-[1mBertForSequenceClassification LOAD REPORT[0m from: cross-encoder/ms-marco-MiniLM-L-6-v2
-Key                          | Status     |  | 
------------------------------+------------+--+-
-bert.embeddings.position_ids | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-[task 9/49] t0=0.003 t1=0.01 — 343 configs -> results/sweep_results/system_f_t0=0.003_t1=0.01.csv
-  [25/343] (0.001, 0.03, 0.03) MRR=0.4578 lat=19.13ms
-  [50/343] (0.003, 0.001, 0.001) MRR=0.4367 lat=19.73ms
-  [75/343] (0.003, 0.03, 0.1) MRR=0.5041 lat=18.98ms
-  [100/343] (0.01, 0.001, 0.003) MRR=0.4348 lat=19.11ms
-  [125/343] (0.01, 0.03, 0.3) MRR=0.4990 lat=18.56ms
-  [150/343] (0.03, 0.001, 0.01) MRR=0.4555 lat=18.44ms
-  [175/343] (0.03, 0.03, 0.5) MRR=0.5237 lat=18.23ms
-  [200/343] (0.1, 0.001, 0.03) MRR=0.4295 lat=17.40ms
-  [225/343] (0.1, 0.1, 0.001) MRR=0.4312 lat=17.30ms
-  [250/343] (0.3, 0.001, 0.1) MRR=0.4379 lat=16.93ms
-  [275/343] (0.3, 0.1, 0.003) MRR=0.4318 lat=16.93ms
-  [300/343] (0.5, 0.001, 0.3) MRR=0.4356 lat=16.78ms
-  [325/343] (0.5, 0.1, 0.01) MRR=0.4294 lat=16.63ms
-[task 9] DONE — 343 rows -> results/sweep_results/system_f_t0=0.003_t1=0.01.csv
