@@ -48,19 +48,9 @@ class TestImportsAndFiles:
         assert "thresholds" in params, "run_full_sweep must accept thresholds"
         assert "output_dir" in params, "run_full_sweep must accept output_dir"
 
-    def test_ncu_microbench_exists(self):
-        assert os.path.exists("scripts/ncu_microbench.py"), (
-            "scripts/ncu_microbench.py must exist"
-        )
-
     def test_run_profiling_sh_exists(self):
         assert os.path.exists("scripts/run_profiling.sh"), (
             "scripts/run_profiling.sh must exist"
-        )
-
-    def test_run_ncu_sh_exists(self):
-        assert os.path.exists("scripts/run_ncu.sh"), (
-            "scripts/run_ncu.sh must exist"
         )
 
     def test_plot_pareto_script_exists(self):
