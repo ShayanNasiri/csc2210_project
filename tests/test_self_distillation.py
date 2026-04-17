@@ -414,7 +414,7 @@ class TestDistillTrainingE2E:
                 output_dir=tmpdir,
                 max_steps=2,
             )
-            weights_path = os.path.join(tmpdir, "system_e_joint_distill_weights.pt")
+            weights_path = os.path.join(tmpdir, "system_e_alpha1.0_beta0.5_weights.pt")
             assert os.path.exists(weights_path)
             state = torch.load(weights_path, weights_only=True)
             assert "backbone" in state

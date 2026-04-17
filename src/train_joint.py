@@ -21,7 +21,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
-from src.constants import MODEL_NAME, MAX_TOKEN_LENGTH, DEFAULT_JOINT_WEIGHTS_PATH, DEFAULT_SYSTEM_E_WEIGHTS_PATH
+from src.constants import MODEL_NAME, MAX_TOKEN_LENGTH
 from src.model import EarlyExitCrossEncoder
 from src.train_offramps import tokenize_training_data
 from src.utils import get_device, set_seed
@@ -172,10 +172,10 @@ def train_joint(
     # Save full model state (backbone + offramps)
     os.makedirs(output_dir, exist_ok=True)
     if output_weights_name is None:
-        output_weights_name = (
-            DEFAULT_SYSTEM_E_WEIGHTS_PATH.split("/")[-1] if beta > 0
-            else DEFAULT_JOINT_WEIGHTS_PATH.split("/")[-1]
-        )
+        if beta > 0:
+            output_weights_name = f"system_e_alpha{alpha}_beta{beta}_weights.pt"
+        else:
+            output_weights_name = f"joint_alpha{alpha}_weights.pt"
     save_path = os.path.join(output_dir, output_weights_name)
     state = {
         "backbone": model.backbone.state_dict(),
