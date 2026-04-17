@@ -1,4 +1,4 @@
-"""Tests for TODO 1: Self-distillation + KL divergence loss.
+"""Tests for self-distillation + KL divergence loss (System E training).
 
 Self-distillation adds a KL-divergence term to each off-ramp loss:
   loss_ramp_i = BCE(ramp_logit, label) + beta * KL(sigmoid(ramp_logit), sigmoid(final_logit).detach())

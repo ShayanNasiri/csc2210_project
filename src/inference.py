@@ -387,8 +387,9 @@ def run_system_e(
 ) -> list:
     """Run System E: jointly-trained model with self-distillation (KL) weights.
 
-    Uses system_e_joint_distill_weights.pt (backbone + offramps trained with
-    KL distillation loss) instead of the standard joint_alpha1.0_weights.pt.
+    Uses the champion System E weights (α=1.0, β=1.0) by default; the backbone
+    and off-ramps are trained jointly with an added KL distillation loss. This
+    differs from System D (joint training without distillation).
 
     Args:
         weights_path: Path to weights file. If None, uses default System E path.

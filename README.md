@@ -4,8 +4,6 @@
 
 A Triton kernel that physically compacts batches during early-exit inference in a cross-encoder re-ranker. Exited documents are removed from the batch between transformer layers, eliminating the wasted compute of padding-style early exit. Evaluated on MS MARCO passage ranking (MRR@10) across eight systems spanning two baselines and six early-exit variants.
 
-Full write-up: [`docs/Project_Report/`](docs/Project_Report/).
-
 ## Test-set results
 
 MS MARCO passage ranking dev set, batch size 64, RTX 4090.
@@ -116,5 +114,4 @@ data/                 # Data download + train/val split utilities
 results/              # Inference JSONs and sweep CSVs (tracked)
   test_set_results/         # Test-set JSONs reported in the paper
   validation_set_results/   # Validation-set JSONs for hyperparameter tuning
-docs/Project_Report/  # LaTeX source of the write-up
 ```
