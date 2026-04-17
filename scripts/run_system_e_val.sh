@@ -21,7 +21,7 @@ for beta in 0.1 0.5 1.0 2.0; do
             --batch_size 64 \
             --data_path data/val_tokenized.pt \
             --weights_path "$weights" \
-            --results_tag "val_beta${beta}_"
+            --results_tag "val_alpha1.0_beta${beta}_"
         echo ""
     else
         echo "SKIP: $weights not found"

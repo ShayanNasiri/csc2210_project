@@ -8,4 +8,4 @@
 #SBATCH --output=results/system_d_val_%j.log
 
 source scripts/setup_env.sh
-python -m src.inference --system system_d --batch_size 64 --data_path data/val_tokenized.pt --results_tag val_
+python -m src.inference --system system_d --batch_size 64 --data_path data/val_tokenized.pt --results_tag val_alpha1.0_
