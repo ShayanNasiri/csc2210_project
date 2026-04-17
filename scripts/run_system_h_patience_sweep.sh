@@ -37,7 +37,7 @@ echo "=========================================="
 echo "System H patience sweep — array task $SLURM_ARRAY_TASK_ID / 195"
 echo "Patience: $PATIENCE"
 echo "Cell ID:  $CELL_ID / 48"
-echo "Weights:  results/system_e_beta1.0_weights.pt"
+echo "Weights:  results/system_e_alpha1.0_beta1.0_weights.pt"
 echo "Output:   results/system_h_sweep_results/"
 echo "=========================================="
 
@@ -45,7 +45,7 @@ python -m src.inference \
     --system per_ramp_sweep \
     --batch_size 64 \
     --data_path data/val_tokenized.pt \
-    --weights_path results/system_e_beta1.0_weights.pt \
+    --weights_path results/system_e_alpha1.0_beta1.0_weights.pt \
     --sweep_subdir system_h_sweep_results \
     --csv_prefix "system_h_p${PATIENCE}" \
     --patience $PATIENCE \

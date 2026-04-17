@@ -5,7 +5,7 @@ System G reuses the same shared sweep driver ``run_per_ramp_threshold_sweep``
 that System F uses — the difference is purely in the kwargs passed by
 ``scripts/run_system_g_per_ramp_threshold_sweep.sh``:
 
-* ``--weights_path results/system_e_beta1.0_weights.pt``
+* ``--weights_path results/system_e_alpha1.0_beta1.0_weights.pt``
 * ``--sweep_subdir system_g_sweep_results``
 * ``--csv_prefix system_g_e_alpha1.0_beta1.0``
 

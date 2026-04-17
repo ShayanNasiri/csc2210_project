@@ -781,7 +781,7 @@ def run_system_g(
     Inference-only single-operating-point variant. Patience is fixed at 1.
     """
     if weights_path is None:
-        weights_path = os.path.join(output_dir, "system_e_beta1.0_weights.pt")
+        weights_path = os.path.join(output_dir, "system_e_alpha1.0_beta1.0_weights.pt")
     return _run_per_ramp_single_point(
         system_name="system_g",
         weights_path=weights_path,
@@ -813,7 +813,7 @@ def run_system_h(
             f"got patience={patience}"
         )
     if weights_path is None:
-        weights_path = os.path.join(output_dir, "system_e_beta1.0_weights.pt")
+        weights_path = os.path.join(output_dir, "system_e_alpha1.0_beta1.0_weights.pt")
     return _run_per_ramp_single_point(
         system_name="system_h",
         weights_path=weights_path,

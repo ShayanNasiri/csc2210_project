@@ -22,7 +22,7 @@ BS=64
 TAG=test_final_
 
 ALPHA05_W=results/joint_alpha0.5_weights.pt
-BETA10_W=results/system_e_beta1.0_weights.pt
+BETA10_W=results/system_e_alpha1.0_beta1.0_weights.pt
 
 echo "=== [1/8] Baseline A ==="
 python -m src.inference --system baseline_a \

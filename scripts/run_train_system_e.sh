@@ -23,4 +23,4 @@ python -m src.train_joint \
     --epochs 3 \
     --batch_size 32 \
     --beta "$BETA" \
-    --output_weights_name "system_e_beta${BETA}_weights.pt"
+    --output_weights_name "system_e_alpha1.0_beta${BETA}_weights.pt"

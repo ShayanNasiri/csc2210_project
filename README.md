@@ -66,7 +66,7 @@ python -m src.train_joint --data_path data/msmarco_train_split.parquet --alpha 0
 # System E (joint + distillation, α=1.0 β=1.0) — also used by G and H
 python -m src.train_joint --data_path data/msmarco_train_split.parquet \
     --alpha 1.0 --beta 1.0 \
-    --output_weights_name system_e_beta1.0_weights.pt
+    --output_weights_name system_e_alpha1.0_beta1.0_weights.pt
 ```
 
 ### 3. Inference
@@ -75,7 +75,7 @@ The canonical end-to-end recipe for all eight systems is in [`scripts/run_final_
 
 ```bash
 python -m src.inference --system system_g \
-    --weights_path results/system_e_beta1.0_weights.pt \
+    --weights_path results/system_e_alpha1.0_beta1.0_weights.pt \
     --thresholds 0.001,0.01,0.1,0.5,0.003 \
     --batch_size 64 \
     --data_path data/dev_tokenized.pt \

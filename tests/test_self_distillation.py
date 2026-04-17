@@ -56,7 +56,7 @@ class TestBetaParameter:
         """The save path inside train_joint must actually use output_weights_name,
         not hardcode a filename. Required for the alpha=0.5 sweep to write
         distinct files like system_e_alpha0.5_beta1.0_weights.pt instead of
-        clobbering the existing system_e_beta1.0_weights.pt files.
+        clobbering the existing system_e_alpha1.0_beta1.0_weights.pt files.
         """
         from src.train_joint import train_joint
         source = inspect.getsource(train_joint)

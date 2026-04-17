@@ -11,7 +11,7 @@ source scripts/setup_env.sh
 
 # Evaluate all System E beta sweep weight files on test set
 for beta in 0.1 0.5 1.0 2.0; do
-    weights="results/system_e_beta${beta}_weights.pt"
+    weights="results/system_e_alpha1.0_beta${beta}_weights.pt"
     if [ -f "$weights" ]; then
         echo "=========================================="
         echo "Evaluating System E with beta=$beta (test)"

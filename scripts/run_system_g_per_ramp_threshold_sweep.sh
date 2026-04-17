@@ -10,7 +10,7 @@
 #SBATCH --output=results/system_g_sweep_%A_%a.log
 
 # System G: per-ramp entropy threshold grid sweep over System E (alpha=1.0,
-# beta=1.0) weights — `results/system_e_beta1.0_weights.pt`.
+# beta=1.0) weights — `results/system_e_alpha1.0_beta1.0_weights.pt`.
 #
 # Same 7^5 = 16,807-config grid and 49-task (t0, t1) partitioning as System F.
 # The only differences from System F are the weights, the output subdirectory,
@@ -41,7 +41,7 @@ source scripts/setup_env.sh
 
 echo "=========================================="
 echo "System G per-ramp sweep — array task $SLURM_ARRAY_TASK_ID / 48"
-echo "Weights: results/system_e_beta1.0_weights.pt"
+echo "Weights: results/system_e_alpha1.0_beta1.0_weights.pt"
 echo "Output : results/system_g_sweep_results/"
 echo "=========================================="
 
@@ -49,7 +49,7 @@ python -m src.inference \
     --system per_ramp_sweep \
     --batch_size 64 \
     --data_path data/val_tokenized.pt \
-    --weights_path results/system_e_beta1.0_weights.pt \
+    --weights_path results/system_e_alpha1.0_beta1.0_weights.pt \
     --sweep_subdir system_g_sweep_results \
     --csv_prefix system_g_e_alpha1.0_beta1.0 \
     --task_id $SLURM_ARRAY_TASK_ID \
