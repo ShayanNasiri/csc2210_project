@@ -1,7 +1,7 @@
 [
   {
     "system": "system_e",
-    "weights": "system_e_beta1.0_weights.pt",
+    "weights": "system_e_alpha1.0_beta1.0_weights.pt",
     "threshold": 0.01,
     "mrr10": 0.3753680235535074,
     "mean_batch_latency_ms": 15.471205778121949,
@@ -18,7 +18,7 @@
   },
   {
     "system": "system_e",
-    "weights": "system_e_beta1.0_weights.pt",
+    "weights": "system_e_alpha1.0_beta1.0_weights.pt",
     "threshold": 0.05,
     "mrr10": 0.1402564430790237,
     "mean_batch_latency_ms": 8.608916492462159,
@@ -35,7 +35,7 @@
   },
   {
     "system": "system_e",
-    "weights": "system_e_beta1.0_weights.pt",
+    "weights": "system_e_alpha1.0_beta1.0_weights.pt",
     "threshold": 0.1,
     "mrr10": 0.10183425072537976,
     "mean_batch_latency_ms": 7.315677752494812,
@@ -52,7 +52,7 @@
   },
   {
     "system": "system_e",
-    "weights": "system_e_beta1.0_weights.pt",
+    "weights": "system_e_alpha1.0_beta1.0_weights.pt",
     "threshold": 0.2,
     "mrr10": 0.09708674688513398,
     "mean_batch_latency_ms": 7.194620499610901,
@@ -69,7 +69,7 @@
   },
   {
     "system": "system_e",
-    "weights": "system_e_beta1.0_weights.pt",
+    "weights": "system_e_alpha1.0_beta1.0_weights.pt",
     "threshold": 0.3,
     "mrr10": 0.09708674688513398,
     "mean_batch_latency_ms": 7.201016006469726,
@@ -86,7 +86,7 @@
   },
   {
     "system": "system_e",
-    "weights": "system_e_beta1.0_weights.pt",
+    "weights": "system_e_alpha1.0_beta1.0_weights.pt",
     "threshold": 0.5,
     "mrr10": 0.09708674688513398,
     "mean_batch_latency_ms": 7.199140453338623,

@@ -1,7 +1,7 @@
 [
   {
     "system": "system_h",
-    "weights": "system_e_beta1.0_weights.pt",
+    "weights": "system_e_alpha1.0_beta1.0_weights.pt",
     "thresholds": [
       0.03,
       0.1,
