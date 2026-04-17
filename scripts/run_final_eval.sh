@@ -5,16 +5,16 @@
 #SBATCH -c 4
 #SBATCH --mem=16G
 #SBATCH -t 3:00:00
-#SBATCH --output=results/final_eval_%j.log
+#SBATCH --output=results/test_set_eval_%j.log
 
 # Unified test-set evaluation for the 8 reportable systems.
-# Output: results/final_eval/test_final_<system>_results.json
+# Output: results/test_set_results/test_final_<system>_results.json
 #   Baselines B/C/D/E produce 6-element lists (internal entropy sweep).
 #   F/G/H produce 1-element lists at their winning per-ramp threshold vectors.
 
 source scripts/setup_env.sh
 
-OUT_DIR=results/final_eval
+OUT_DIR=results/test_set_results
 mkdir -p "$OUT_DIR"
 
 DATA=data/dev_tokenized.pt

@@ -1,7 +1,0 @@
-{
-  "system": "baseline_a",
-  "mrr10": 0.7332335936166581,
-  "mean_batch_latency_ms": 42.641317481994626,
-  "total_latency_s": 4.264131748199463,
-  "batch_size": 8
-}

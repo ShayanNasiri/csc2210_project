@@ -79,7 +79,7 @@ python -m src.inference --system system_g \
     --thresholds 0.001,0.01,0.1,0.5,0.003 \
     --batch_size 64 \
     --data_path data/dev_tokenized.pt \
-    --output_dir results/final_eval \
+    --output_dir results/test_set_results \
     --results_tag test_final_
 ```
 
@@ -114,6 +114,7 @@ scripts/              # Inference runners, sweep drivers, analyzers
 tests/                # Pytest suite
 data/                 # Data download + train/val split utilities
 results/              # Inference JSONs and sweep CSVs (tracked)
-  final_eval/         # Test-set JSONs reported in the paper
+  test_set_results/         # Test-set JSONs reported in the paper
+  validation_set_results/   # Validation-set JSONs for hyperparameter tuning
 docs/Project_Report/  # LaTeX source of the write-up
 ```

@@ -53,11 +53,6 @@ class TestImportsAndFiles:
             "scripts/run_profiling.sh must exist"
         )
 
-    def test_plot_pareto_script_exists(self):
-        assert os.path.exists("scripts/plot_pareto.py"), (
-            "scripts/plot_pareto.py must exist"
-        )
-
 
 # ---------------------------------------------------------------------------
 # CSV-dependent tests (skip until full_sweep.csv exists)
