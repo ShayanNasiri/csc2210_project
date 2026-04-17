@@ -11,7 +11,7 @@
 source scripts/setup_env.sh
 
 # Each array task trains one alpha value.
-# alpha=1.0 already exists as results/joint_weights.pt — not re-trained here.
+# alpha=1.0 already exists as results/joint_alpha1.0_weights.pt — not re-trained here.
 ALPHAS=(0.5 2.0)
 ALPHA=${ALPHAS[$SLURM_ARRAY_TASK_ID]}
 

@@ -18,7 +18,7 @@ DEFAULT_VAL_DATA_PATH = "data/val_tokenized.pt"
 DEFAULT_TRAIN_SPLIT_PATH = "data/msmarco_train_split.parquet"
 DEFAULT_RESULTS_DIR = "results"
 DEFAULT_OFFRAMP_WEIGHTS_PATH = "results/offramp_weights.pt"
-DEFAULT_JOINT_WEIGHTS_PATH = "results/joint_weights.pt"
+DEFAULT_JOINT_WEIGHTS_PATH = "results/joint_alpha1.0_weights.pt"
 DEFAULT_SYSTEM_E_WEIGHTS_PATH = "results/system_e_joint_distill_weights.pt"
 
 # Default thresholds for Baseline B

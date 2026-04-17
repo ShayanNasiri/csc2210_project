@@ -10,8 +10,8 @@
 source scripts/setup_env.sh
 
 # Evaluate all System D alpha sweep weight files on validation set.
-# alpha=1.0 uses the canonical joint_weights.pt; sweep variants live at
-# results/joint_alpha${ALPHA}_weights.pt.
+# Weight files live at results/joint_alpha${ALPHA}_weights.pt for each alpha.
+# alpha=1.0 is evaluated by run_system_d_val.sh; this script covers the sweep variants.
 for alpha in 0.5 2.0; do
     weights="results/joint_alpha${alpha}_weights.pt"
     if [ -f "$weights" ]; then

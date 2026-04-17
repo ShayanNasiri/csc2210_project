@@ -223,13 +223,13 @@ class TestSystemDWeightLoading:
         assert "weights_path" in sig.parameters
 
     def test_run_system_d_weights_path_default_is_none(self):
-        """weights_path must default to None so existing call sites keep using joint_weights.pt."""
+        """weights_path must default to None so existing call sites keep using joint_alpha1.0_weights.pt."""
         from src.inference import run_system_d
         sig = inspect.signature(run_system_d)
         assert sig.parameters["weights_path"].default is None
 
     def test_run_system_d_uses_weights_path_when_provided(self):
-        """run_system_d source must reference weights_path (not just hardcoded joint_weights.pt)."""
+        """run_system_d source must reference weights_path (not just hardcoded joint_alpha1.0_weights.pt)."""
         source = inspect.getsource(__import__("src.inference", fromlist=["run_system_d"]).run_system_d)
         assert "weights_path" in source
 

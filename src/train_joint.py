@@ -7,7 +7,7 @@ by alpha. This forces early BERT layers to develop discriminative features for t
 off-ramps, improving early-exit accuracy.
 
 Existing weights (results/offramp_weights.pt) are NOT modified. Joint-trained
-weights are saved to results/joint_weights.pt as a dict with keys:
+weights are saved to results/joint_alpha1.0_weights.pt as a dict with keys:
   - "backbone": full backbone state_dict
   - "offramps": off-ramp collection state_dict
 """
@@ -76,7 +76,7 @@ def train_joint(
         offramp_lr: Learning rate for off-ramp parameters.
         alpha: Weight for off-ramp losses relative to final classifier loss.
                total_loss = loss_final + alpha * mean(offramp_losses)
-        output_dir: Directory to save joint_weights.pt.
+        output_dir: Directory to save joint-trained weights.
         max_steps: Max training steps (-1 for full training).
     """
     set_seed()

@@ -296,9 +296,9 @@ def run_system_d(
 ) -> list:
     """Run System D: jointly-trained model with Triton-compacted early exit.
 
-    Uses joint_weights.pt by default (backbone + offramps trained together with
-    alpha=1.0). For the alpha sweep, pass a custom `weights_path` such as
-    `results/joint_alpha0.5_weights.pt`.
+    Uses joint_alpha1.0_weights.pt by default (backbone + offramps trained
+    together with alpha=1.0). For the alpha sweep, pass a custom `weights_path`
+    such as `results/joint_alpha0.5_weights.pt`.
 
     Returns a list of result dicts, one per threshold.
     """
@@ -311,7 +311,7 @@ def run_system_d(
     # Load model + joint weights (backbone + offramps)
     model = EarlyExitCrossEncoder()
     if weights_path is None:
-        weights_path = os.path.join(output_dir, "joint_weights.pt")
+        weights_path = os.path.join(output_dir, "joint_alpha1.0_weights.pt")
     state = torch.load(weights_path, map_location=device, weights_only=True)
     model.backbone.load_state_dict(state["backbone"])
     model.offramps.load_state_dict(state["offramps"])
@@ -388,7 +388,7 @@ def run_system_e(
     """Run System E: jointly-trained model with self-distillation (KL) weights.
 
     Uses system_e_joint_distill_weights.pt (backbone + offramps trained with
-    KL distillation loss) instead of the standard joint_weights.pt.
+    KL distillation loss) instead of the standard joint_alpha1.0_weights.pt.
 
     Args:
         weights_path: Path to weights file. If None, uses default System E path.
