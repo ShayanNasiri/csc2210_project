@@ -117,13 +117,13 @@ def plot_pareto(points, out_path: Path):
     # Classify: champion G, baselines, others.
     categories = {
         "Baseline A (target)": ["A"],
-        "Naive / frozen-ramp": ["B", "C"],
+        "Naive / frozen-backbone": ["B", "C"],
         "Joint-trained (single $\\tau$)": ["D", "E"],
         "Per-ramp $\\mathbf{\\tau}$": ["F", "G", "H"],
     }
     style = {
         "Baseline A (target)": dict(marker="*", s=220, color="#cc3333", zorder=5),
-        "Naive / frozen-ramp": dict(marker="X", s=95, color="#888888", zorder=3),
+        "Naive / frozen-backbone": dict(marker="X", s=95, color="#888888", zorder=3),
         "Joint-trained (single $\\tau$)": dict(marker="o", s=80, color="#1f77b4", zorder=4),
         "Per-ramp $\\mathbf{\\tau}$": dict(marker="s", s=80, color="#2ca02c", zorder=4),
     }
@@ -193,7 +193,7 @@ def plot_exits(points, out_path: Path):
     names = {
         "A": "A (full model)",
         "B": "B (naive)",
-        "C": "C (Triton, frozen)",
+        "C": "C (Triton)",
         "D": r"D",
         "E": r"E",
         "F": "F",
